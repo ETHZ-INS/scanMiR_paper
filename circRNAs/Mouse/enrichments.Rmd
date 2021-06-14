@@ -1,0 +1,105 @@
+---
+title: "enrichment"
+author: "Pierre-Luc Germain"
+date: "2/1/2021"
+output: html_document
+---
+
+```{r}
+suppressPackageStartupMessages({
+  library(Matrix)
+  library(GenomicRanges)
+  library(scanMiR)
+  library(ggplot2)
+  library(ggrepel)
+  library(rtracklayer)
+})
+
+g <- import("mouse_brain_circRNAs.gtf")
+tmp <- strsplit(g$isoform,"|",fixed=TRUE)
+g <- g[rep(seq_along(g),lengths(tmp))]
+g$isoform <- unlist(tmp)
+df <- data.frame(row.names=paste(g$circ_id, g$isoform), score=as.integer(g$score), 
+                 gene=g$gene_name, strand=as.factor(strand(g)))
+df <- df[order(df$gene, -df$score),]
+
+df$name <- make.unique(ifelse(is.na(df$gene),"intergenic",df$gene))
+
+gr <- readRDS("canonical.GR.rds")
+seqlevels(gr) <- df[seqlevels(gr),"name"]
+
+row.names(df) <- df$name
+
+e <- enrichedMirTxPairs(gr)
+e$expression <- df[as.character(e$feature),"score"]
+e$gene <- gsub("\\.[0-9]+$","",e$feature)
+saveRDS(e, file="enrichment.scores.7and8mers.rds")
+
+mirexp <- read.delim("Normalized miRNA Brain expression from Chiang et al. 2010_.csv", sep=",")
+mirexp <- sapply(split(mirexp[,2], mirexp[,1]), na.rm=TRUE, FUN=max)
+e$mirexp <- mirexp[as.character(e$set)]
+e <- e[e$mirexp>=100,]
+
+
+e$gene[e$gene=="C230004F18Rik"] <- "Cdr1as"
+e <- e[order(e$logp.binom*-log10(e$expression), decreasing=TRUE),]
+etop <- e[e$expression>10,]
+etop <- etop[etop$gene %in% head(unique(etop$gene),8),]
+etop <- etop[!duplicated(etop$gene),]
+etop$lab <- paste(etop$gene, gsub("mmu-","",etop$set), sep="\n")
+
+e$gene[!(e$gene %in% etop$gene)] <- "other"
+e$gene <- factor(e$gene, unique(e$gene))
+
+cols <- c("#332288", "#88CCEE", "#44AA99", "#117733", "#999933", "#DDCC77", 
+"#CC6677", "#AA4499","grey")
+names(cols) <- levels(e$gene)
+```
+
+```{r, fig.width=9, fig.height=4}
+ggplot(e, aes(expression, -logp.binom+1)) + 
+  geom_point(aes(colour=gene, size=sites, alpha=gene!="other")) + 
+  scale_alpha_manual(values=c("TRUE"=0.5,"FALSE"=0.25), guide=FALSE) +
+  scale_x_log10() + scale_y_log10() + scale_color_manual(values=cols) +
+  labs(x="Expression in the brain (BSJ counts)", y="-log(binomial p.value)", colour="Host gene") +
+  geom_point(data=etop, aes(colour=gene, size=sites)) + 
+  geom_text_repel(data=etop, aes(label=lab), min.segment.length = 0)
+```
+
+Each dot represents the combination between a specific circRNA isoform and a specific miRNAs. circRNAs from the top genes are colored, and the top isoform-miRNA combination for each of them is labeled.
+
+# Slicing sites
+
+```{r, fig.width=9, fig.height=4}
+sl <- gr[grep("Slicing",gr$note)]
+sl$mirexp <- log10(1+mirexp[as.character(sl$miRNA)])
+sl$txexp <- df[as.character(seqnames(sl)),"score"]
+sl <- sl[which(sl$mirexp>0 & sl$txexp>2)]
+sl <- cbind(circRNA=seqnames(sl),as.data.frame(mcols(sl)))
+sl <- sl[order(sl$mirexp, -sl$p3.score, sl$log_kd), ]
+sl <- sl[!duplicated(sl),]
+sl$lab <- paste(gsub("mmu-","",sl$miRNA),sl$circRNA,sep="\n")
+sl <- sl[order(sl$txexp, decreasing=TRUE),]
+sl$gene <- gsub("\\.[0-9]+$","",sl$circRNA)
+sl <- sl[!duplicated(sl[,c("gene","miRNA")]),]
+saveRDS(sl, file="slicing.rds")
+
+ggplot(sl, aes(txexp,mirexp)) + geom_point() + geom_label_repel(data=sl[(sl$mirexp>15 & sl$txexp>5) | sl$txexp>30,], aes(label=lab), max.overlaps = 30, min.segment.length = 0) + scale_x_log10() + scale_y_log10() + labs(x="circRNA expression in the brain (BSJ counts)", y="miRNA expression in the brain (CPMs)") + ggtitle("circRNA slicing sites")
+```
+
+# TDMD sites
+
+```{r, fig.width=9, fig.height=4}
+sl <- gr[gr$note=="TDMD"]
+sl$mirexp <- mirexp[as.character(sl$miRNA)]
+sl$txexp <- df[as.character(seqnames(sl)),"score"]
+sl <- sl[which(sl$mirexp>1 & sl$txexp>2)]
+sl <- cbind(circRNA=seqnames(sl),as.data.frame(mcols(sl)))
+sl$gene <- gsub("\\.[0-9]+$","",sl$circRNA)
+sl <- sl[order(sl$miRNA, sl$log_kd, -sl$p3.score, -as.integer(sl$note), sl$txexp),]
+sl <- sl[!duplicated(sl[,c("gene","miRNA")]),]
+sl$lab <- paste(gsub("mmu-","",sl$miRNA),sl$gene,sep="\n")
+sl$exp.score <- log10(sl$txexp) * log10(sl$mirexp)
+
+ggplot(sl, aes(txexp,mirexp,shape=type)) + geom_point(aes(colour=log_kd), size=3) + geom_label_repel(data=sl[(sl$mirexp>50 & sl$txexp>30) | sl$txexp> 1000,], aes(label=lab), max.overlaps = 30, min.segment.length = 0) + scale_x_log10() + scale_y_log10() + labs(x="circRNA expression in the brain (BSJ counts)", y="miRNA expression in the brain (CPMs)") + ggtitle("miRNA TDMD sites on circRNAs")
+```

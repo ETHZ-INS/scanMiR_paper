@@ -1,0 +1,164 @@
+---
+title: "Figure5_TDMD"
+author: "Pierre-Luc Germain"
+date: "4/7/2021"
+output: html_document
+---
+
+```{r}
+suppressPackageStartupMessages({
+  library(rtracklayer)
+  library(GenomicRanges)
+  library(ggplot2)
+  library(ggrepel)
+  library(cowplot)
+  
+})
+theme_set(theme_cowplot())
+```
+
+
+#colors
+```{r}
+source("../misc.R")
+```
+
+
+
+
+```{r}
+mirexp <- read.delim("../../circRNAs/Mouse/Normalized miRNA Brain expression from Chiang et al. 2010_.csv", sep=",")
+mirexp <- sapply(split(mirexp[,2], mirexp[,1]), na.rm=TRUE, FUN=max)
+
+g <- import("/mnt/schratt/scanMiR_paper_scripts/circRNAs/Mouse/mouse_brain_circRNAs.gtf")
+tmp <- strsplit(g$isoform,"|",fixed=TRUE)
+g <- g[rep(seq_along(g),lengths(tmp))]
+g$isoform <- unlist(tmp)
+df <- data.frame(row.names=paste(g$circ_id, g$isoform), score=as.integer(g$score), 
+                 gene=g$gene_name, strand=as.factor(strand(g)))
+df <- df[order(df$gene, -df$score),]
+
+circ <- readRDS("/mnt/schratt/scanMiR_paper_scripts/circRNAs/Mouse/canonical.GR.rds")
+circ <- circ[grep("TDMD",circ$note)]
+circ$tx.type <- "circRNA"
+circ$tx.exp <- df[as.character(seqnames(circ)),"score"]
+circ$gene <- df[as.character(seqnames(circ)),"gene"]
+circ$mir.exp <- log10(1+mirexp[as.character(circ$miRNA)])
+circ.table <- as.data.frame(circ)[,-c(3:5)]
+saveRDS(circ.table, "suppTable_circTDMD.rds")
+circ$label <- paste(circ$gene, circ$miRNA, sep="\n")
+circ1 <- as.data.frame(circ[which(circ$mir.exp > 0 & circ$tx.exp > 0),])
+circ2 <- as.data.frame(circ[which(circ$mir.exp > log10(51) & circ$tx.exp > 10),])
+circ1$note <- relevel(circ1$note, "TDMD")
+circ1 <- circ1[order(circ1$note, circ1$type, -circ1$tx.exp),]
+circ1 <- circ1[!duplicated(circ1[,c("gene","miRNA")]),]
+
+
+nc <- readRDS("/mnt/schratt/scanMiR_paper_scripts/lncRNAs/mouse_lncRNAs_cons.miRNAs_TDMD.rds")
+nc.exp <- readRDS("../../lncRNAs/mouse_hippocampus_TPMs.rds")
+nc$tx.type <- "lincRNA"
+nc$tx.exp <- nc.exp[as.character(seqnames(nc))]
+nc$mir.exp <- log10(1+mirexp[as.character(nc$miRNA)])
+nc.table <- as.data.frame(nc)[,-c(3:5)]
+tx2g <- read.delim("/reference/Mus_musculus/Ensembl/GRCm39/Annotation/Release_103/tx2gene",header = FALSE)
+colnames(tx2g) <- c("transcript","gene")
+tx2g$transcript <- gsub("\\..*","",tx2g$transcript)
+nc.table <- merge(nc.table,tx2g,by.x = "seqnames",by.y = "transcript",all.x = TRUE)
+colnames(nc.table)[colnames(nc.table) == "seqnames"] <- "transcript"
+saveRDS(nc.table, "suppTable_lncTDMD.rds")
+nc$label <- paste(seqnames(nc), nc$miRNA, sep="\n")
+nc1 <- as.data.frame(nc[which(grepl("TDMD", nc$note) & nc$mir.exp > 0.4 & nc$tx.exp > 0.0001),])
+nc2 <- as.data.frame(nc[which(grepl("TDMD", nc$note) & nc$mir.exp > log10(51) & nc$tx.exp > 0.01),])
+
+f <- intersect(colnames(circ2),colnames(nc2))
+e <- rbind(circ2[,f], nc2[,f])
+```
+
+```{r}
+nc1$note <- relevel(nc1$note, "TDMD")
+nc1.lab <- nc1[nc1$tx.exp>0.2,]
+nc1.lab$label <- as.character(nc1.lab$label)
+p1 <- ggplot(nc1, aes(tx.exp, mir.exp, colour=note, shape=type, label=label)) + 
+    geom_point(size=3) + scale_x_sqrt() + 
+    labs(x="Transcript expression (TPM)", y="miRNA expression (logCPMs)", shape="Match\ntype") + 
+    geom_text_repel(data=nc1.lab, nudge_x = 1, nudge_y = c(1,-0.75,-1.5,-1,1,0.5,-0.5), min.segment.length = 0, show.legend = FALSE) +
+    scale_color_manual(values = c(darkturquoise,"darkred")) +
+    scale_fill_manual(values = c(darkturquoise,"darkred"))
+p1
+```
+
+```{r}
+w <- which(circ1$tx.exp>1500 & circ1$mir.exp > 6.35-0.1*sqrt(circ1$tx.exp))
+circ1$label <- gsub("mmu-","",circ1$label)
+circ1$lab.dir <- sign(circ1$mir.exp - (5.5-0.06*sqrt(circ1$tx.exp)))
+circ1$lab.dir[circ1$gene %in% c("Dennd1b","Cobl")] <- 0
+p2 <- ggplot(circ1, aes(tx.exp, mir.exp, colour=note, fill=note, shape=type, label=label)) + 
+  geom_point(size=3) + scale_x_sqrt() + 
+  labs(x="circRNA expression in the brain (BSJ counts)", y="miRNA expression (logCPMs)", shape="Match\ntype") + 
+  geom_text_repel(data=circ1[w,], nudge_x = 30, nudge_y = circ1$lab.dir[w], min.segment.length = 0, show.legend = FALSE) +
+  scale_color_manual(values = c(darkturquoise,"darkred")) +
+  scale_fill_manual(values = c(darkturquoise,"darkred")) 
+p2
+```
+
+
+
+
+
+
+# circRNA Slicing sites
+
+```{r, fig.width=9, fig.height=4}
+sl <- readRDS("../../circRNAs/Mouse/slicing.rds")
+saveRDS(sl, "suppTable_circSlicing.rds")
+sl$gene[sl$gene=="C230004F18Rik"] <- "Cdr1as"
+sl$lab <- paste(gsub("mmu-","",sl$miRNA),sl$gene,sep="\n")
+sl <- sl[sl$mirexp > 0.4,]
+
+
+p3 <- ggplot(sl, aes(txexp,mirexp)) + geom_point() + 
+  geom_text_repel(data=sl[(sl$mirexp>15 & sl$txexp>10) | sl$txexp>10,], aes(label=lab),
+                   fill = NA, max.overlaps = 30, min.segment.length = 0, nudge_x = 0.3, nudge_y=c(-0.25,0.25)) + 
+  scale_x_log10() + scale_y_log10() + labs(x="circRNA expression in the brain (BSJ counts)", y="miRNA expression (logCPMs)") 
+p3
+```
+
+
+```{r, fig.width=10, fig.height=9, eval=FALSE}
+# pp1 <- plot_grid(p1 + theme(legend.position = "none"),p2,
+#                  ncol=2, labels=c("A: TDMDs on lincRNAs","B: TDMDs on circular RNAs"), 
+#                 scale=0.95, rel_widths = c(1,1.3))
+# pp2 <- plot_grid(p3,p4,ncol=2, labels=c("C: Predicted Slicing Sites on circRNAs","D: circRNA-miRNA enrichment"), 
+#                 scale=0.95, rel_widths = c(1,1.3))
+# 
+# #pp <- plot_grid(p1,p2,p3,p4,ncol=2, labels=c("A: TDMDs on lincRNAs","B: TDMDs on circular RNAs", "C: Predicted Slicing Sites on circRNAs","D: circRNA-miRNA enrichment"), scale=0.95, rel_heights = c(1,1.2))
+# pp <- plot_grid(pp1,pp2,ncol = 1, rel_heights = c(1.1,1))
+# 
+# ggsave("Fig5.pdf",plot = pp, width = 14, height = 10)
+# ggsave("Fig5.png",plot = pp, width = 14, height = 10)
+# pp
+```
+
+
+```{r, fig.width=8, fig.height=10}
+pp <- plot_grid( 
+  p1 + ggtitle("TDMD sites in lncRNAs"),
+  p2 + ggtitle("TDMD sites in circRNAs"), 
+  p3 + ggtitle("circRNA slicing sites") + ylab("miRNA expression\n(logCPMs)"),
+  nrow=3, rel_heights =c(4,4,2.75), labels="AUTO", scale=0.95
+)
+ggsave("Figure_5.pdf",plot = pp, width = 8, height = 10)
+ggsave("Figure_5.png",plot = pp, width = 8, height = 10)
+pp
+```
+
+
+
+
+
+
+
+
+
+
+

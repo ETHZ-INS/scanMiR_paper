@@ -1,0 +1,86 @@
+
+code	|	name	|	preferred name	|	taxid
+1	|	"Homo sapiens"	|	Homo sapiens	|	9606
+1	|	"Pan troglodytes"	|	Pan troglodytes	|	9598
+1	|	"Gorilla gorilla gorilla"	|	Gorilla gorilla gorilla	|	9595
+1	|	"Pongo pygmaeus abelii"	|	Pongo abelii	|	9601
+1	|	"Nomascus leucogenys"	|	Nomascus leucogenys	|	61853
+1	|	"Macaca mulatta"	|	Macaca mulatta	|	9544
+1	|	"Macaca fascicularis"	|	Macaca fascicularis	|	9541
+1	|	"Papio hamadryas"	|	Papio hamadryas	|	9557
+1	|	"Chlorocebus sabaeus"	|	Chlorocebus sabaeus	|	60711
+1	|	"Callithrix jacchus"	|	Callithrix jacchus	|	9483
+1	|	"Saimiri boliviensis"	|	Saimiri boliviensis	|	27679
+1	|	"Otolemur garnettii"	|	Otolemur garnettii	|	30611
+1	|	"Tupaia chinensis"	|	Tupaia chinensis	|	246437
+1	|	"Spermophilus tridecemlineatus"	|	Ictidomys tridecemlineatus	|	43179
+1	|	"Jaculus jaculus"	|	Jaculus jaculus	|	51337
+1	|	"Microtus ochrogaster"	|	Microtus ochrogaster	|	79684
+1	|	"Cricetulus griseus"	|	Cricetulus griseus	|	10029
+1	|	"Mesocricetus auratus"	|	Mesocricetus auratus	|	10036
+1	|	"Mus musculus"	|	Mus musculus	|	10090
+1	|	"Rattus norvegicus"	|	Rattus norvegicus	|	10116
+1	|	"Heterocephalus glaber"	|	Heterocephalus glaber	|	10181
+1	|	"Cavia porcellus"	|	Cavia porcellus	|	10141
+1	|	"Chinchilla lanigera"	|	Chinchilla lanigera	|	34839
+1	|	"Octodon degus"	|	Octodon degus	|	10160
+1	|	"Oryctolagus cuniculus"	|	Oryctolagus cuniculus	|	9986
+1	|	"Ochotona princeps"	|	Ochotona princeps	|	9978
+1	|	"Sus scrofa"	|	Sus scrofa	|	9823
+1	|	"Vicugna pacos"	|	Vicugna pacos	|	30538
+1	|	"Camelus ferus"	|	Camelus ferus	|	419612
+1	|	"Tursiops truncatus"	|	Tursiops truncatus	|	9739
+1	|	"Orcinus orca"	|	Orcinus orca	|	9733
+1	|	"Pantholops hodgsonii"	|	Pantholops hodgsonii	|	59538
+1	|	"Bos taurus"	|	Bos taurus	|	9913
+1	|	"Ovis aries"	|	Ovis aries	|	9940
+1	|	"Capra hircus"	|	Capra hircus	|	9925
+1	|	"Equus caballus"	|	Equus caballus	|	9796
+1	|	"Ceratotherium simum"	|	Ceratotherium simum	|	9807
+1	|	"Felis catus"	|	Felis catus	|	9685
+1	|	"Canis lupus familiaris"	|	Canis lupus familiaris	|	9615
+1	|	"Mustela putorius furo"	|	Mustela putorius furo	|	9669
+1	|	"Ailuropoda melanoleuca"	|	Ailuropoda melanoleuca	|	9646
+1	|	"Odobenus rosmarus divergens"	|	Odobenus rosmarus divergens	|	9708
+1	|	"Leptonychotes weddellii"	|	Leptonychotes weddellii	|	9713
+1	|	"Pteropus alecto"	|	Pteropus alecto	|	9402
+1	|	"Pteropus vampyrus"	|	Pteropus vampyrus	|	132908
+1	|	"Myotis davidii"	|	Myotis davidii	|	225400
+1	|	"Myotis lucifugus"	|	Myotis lucifugus	|	59463
+1	|	"Eptesicus fuscus"	|	Eptesicus fuscus	|	29078
+1	|	"Erinaceus europaeus"	|	Erinaceus europaeus	|	9365
+1	|	"Sorex araneus"	|	Sorex araneus	|	42254
+1	|	"Condylura cristata"	|	Condylura cristata	|	143302
+1	|	"Loxodonta africana"	|	Loxodonta africana	|	9785
+1	|	"Elephantulus edwardii"	|	Elephantulus edwardii	|	28737
+1	|	"Trichechus manatus latirostris"	|	Trichechus manatus latirostris	|	127582
+1	|	"Chrysochloris asiatica"	|	Chrysochloris asiatica	|	185453
+1	|	"Echinops telfairi"	|	Echinops telfairi	|	9371
+1	|	"Orycteropus afer afer"	|	Orycteropus afer afer	|	1230840
+1	|	"Dasypus novemcinctus"	|	Dasypus novemcinctus	|	9361
+1	|	"Monodelphis domestica"	|	Monodelphis domestica	|	13616
+1	|	"Sarcophilus harrisii"	|	Sarcophilus harrisii	|	9305
+1	|	"Macropus eugenii"	|	Notamacropus eugenii	|	9315
+1	|	"Ornithorhynchus anatinus"	|	Ornithorhynchus anatinus	|	9258
+1	|	"Falco cherrug"	|	Falco cherrug	|	345164
+1	|	"Falco peregrinus"	|	Falco peregrinus	|	8954
+1	|	"Ficedula albicollis"	|	Ficedula albicollis	|	59894
+1	|	"Zonotrichia albicollis"	|	Zonotrichia albicollis	|	44394
+1	|	"Geospiza fortis"	|	Geospiza fortis	|	48883
+1	|	"Taeniopygia guttata"	|	Taeniopygia guttata	|	59729
+1	|	"Pseudopodoces humilis"	|	Pseudopodoces humilis	|	181119
+1	|	"Melopsittacus undulatus"	|	Melopsittacus undulatus	|	13146
+1	|	"Amazona vittata"	|	Amazona vittata	|	241585
+1	|	"Ara macao"	|	Ara macao	|	176014
+1	|	"Columba livia"	|	Columba livia	|	8932
+1	|	"Anas platyrhynchos"	|	Anas platyrhynchos	|	8839
+1	|	"Gallus gallus"	|	Gallus gallus	|	9031
+1	|	"Meleagris gallopavo"	|	Meleagris gallopavo	|	9103
+1	|	"Alligator mississippiensis"	|	Alligator mississippiensis	|	8496
+1	|	"Chelonia mydas"	|	Chelonia mydas	|	8469
+1	|	"Chrysemys picta bellii"	|	Chrysemys picta bellii	|	8478
+1	|	"Pelodiscus sinensis"	|	Pelodiscus sinensis	|	13735
+1	|	"Apalone spinifera"	|	Apalone spinifera	|	55534
+1	|	"Anolis carolinensis"	|	Anolis carolinensis	|	28377
+1	|	"Xenopus tropicalis"	|	Xenopus tropicalis	|	8364
+1	|	"Latimeria chalumnae"	|	Latimeria chalumnae	|	7897

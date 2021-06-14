@@ -1,0 +1,99 @@
+---
+title: "Speed_Figure"
+author: "Michael Soutschek"
+date: "3/29/2021"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+library(scales)
+```
+
+
+
+#load data
+
+#scanMiR
+```{r}
+scM <- unlist(readRDS("./scanMiR/scanMiR_time_table.rds"))
+sc_type <-  c(rep("10",5), rep("100",5), rep("1000",5), rep("10_mult",5), rep("100_mult",5), rep("1000_mult",5))
+scM_df <- data.frame(alg = "scanMiR",type = sc_type,time = scM,info = names(scM))
+Fig_scM_df <- scM_df[scM_df$info == "elapsed",]
+Fig_scM_df$info <- NULL
+```
+
+#Targetscan
+```{r}
+Tar_raw <- read.delim("./Targetscan/Targetscan_times.txt",header = FALSE)
+tar_min <- (as.numeric(sapply(strsplit(Tar_raw$V2,"m"),'[',1)) * 60) 
+tar_sek <- sapply(strsplit(Tar_raw$V2,"m"),'[',2)
+tar_sek <- as.double(substr(tar_sek,1,nchar(tar_sek)-1))
+tar_time <- tar_min + tar_sek
+tar_type <- c("10","100","1000","10_mult","100_mult","1000_mult")
+Fig_Tar_df <- data.frame(alg = "Targetscan",type = tar_type,time = tar_time)
+```
+
+#McGeary
+```{r}
+McG_raw <- read.delim("./McGeary/McGeary_times.txt",header = FALSE)
+McG_min <- (as.numeric(sapply(strsplit(McG_raw$V2,"m"),'[',1)) * 60) 
+McG_sek <- sapply(strsplit(McG_raw$V2,"m"),'[',2)
+McG_sek <- as.double(substr(McG_sek,1,nchar(McG_sek)-1))
+McG_time <- McG_min + McG_sek
+McG_type <- c("10_Fold","100_Fold","1000_Fold","10","100","1000")
+Fig_McG_df <- data.frame(alg = "McGeary Lin",type = McG_type,time = McG_time)
+```
+
+
+# Figure
+```{r}
+df <- rbind(Fig_scM_df,Fig_Tar_df,Fig_McG_df)
+df$type2 <- "Single Core Scan"
+df[grep("mult",df$type),"type2"] <- "Multi Core Scan"
+df[grep("Fold",df$type),"type2"] <- "+ Folding"
+df$Sequences <- as.double(sapply(strsplit(df$type,"_"),"[",1))
+df$Condition <- df$type2
+df$Algorithm <- df$alg
+
+df1 <- df[!grepl("Fold",df$type),]
+df2 <- df[df$alg == "McGeary Lin",]
+
+df1$Condition <- factor(df1$Condition,levels = c("Single Core Scan", "Multi Core Scan"))
+df2$Condition <- factor(df2$Condition,levels = c("Single Core Scan", "+ Folding"))
+
+saveRDS(df1,"Speed_DF1.rds")
+saveRDS(df2,"Speed_DF2.rds")
+```
+
+
+
+#Figure
+```{r}
+ggplot(df1,aes(x = Sequences, y = time, color = Algorithm)) + geom_line(aes(linetype = Condition)) + 
+  scale_x_log10()  + ylab("Time in sek") + theme_classic()
+
+ggsave("Speed_Figure1.png",width = 7,height = 6)
+```
+
+
+
+
+```{r}
+ggplot(df2,aes(x = Sequences, y = time, color = Algorithm)) + geom_line(aes(linetype = Condition)) + 
+  scale_x_log10() + ylab("Time in sek") + theme_classic()
+
+ggsave("Speed_Figure2.png",width = 7,height = 6)
+```
+
+
+
+
+
+
+
+
+
+
+
+

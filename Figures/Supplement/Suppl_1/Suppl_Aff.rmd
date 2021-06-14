@@ -1,0 +1,61 @@
+---
+title: "Suppl. Affinity"
+author: "Michael Soutschek"
+date: "16 5 2021"
+output: html_document
+---
+
+```{r, include=FALSE}
+if(!exists('FIG_NB')){
+  FIG_NB <- 0; FIG_STRING <- "Supplementary Figure S"
+  getFigNb <- function(increment=FALSE){
+    if(increment) FIG_NB <<- FIG_NB + 1
+    paste0(FIG_STRING,FIG_NB)
+  }
+}
+knitr::opts_chunk$set(fig.width=8)
+```
+
+```{r, include=FALSE}
+suppressPackageStartupMessages({
+  library(scanMiR)
+  library(scanMiRData)
+  library(ggplot2)
+  library(cowplot)
+  library(grid)
+})
+source("../../misc.R")
+```
+
+# `r getFigNb(TRUE)`
+
+```{r, include=FALSE}
+hsa <- getKdModels(species = "hsa")
+hsa_499 <- hsa[["hsa-miR-499a-5p"]]
+hsa_129 <- hsa[["hsa-miR-129-5p"]]
+hsa_155 <- hsa[["hsa-miR-155-5p"]]
+op <- par()
+par(mar=c(0,0,0,0))
+p1 <- grid::grid.grabExpr(plotKdModel(hsa_499,"logo"))
+p2 <- grid::grid.grabExpr(plotKdModel(hsa_129,"logo"))
+p3 <- plotKdModel(hsa_155, what = "seeds") + 
+  guides(fill=guide_legend(nrow=2,byrow=TRUE,title.position = "top")) +
+  theme_minimal() + theme(
+    axis.text.y = element_text(family="mono", size = 10),
+    plot.subtitle=element_text(family="mono"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    legend.position = "bottom") +
+      scale_fill_manual(values = type_cols)
+```
+
+
+```{r, fig.height=3.8, fig.width=8}
+pp1 <- plot_grid(p1,p2,nrow = 2,labels = c("miR-499a-5p","miR-129-5p"), scale=0.95,
+                 label_fontface = 0, hjust = 0, label_x = 0.5)
+plot_grid(pp1,p3,ncol = 2,labels = c("A","B"))
+```
+
+### `r getFigNb()`
+
+**ScanMiR plotting functions provide insights into miRNA biology. A:** Nucleotide information content plots of miR-499a-5p and miR-129-5p. The information content of each nucleotide is calculated by its occurrence in the top ten seeds with the lowest dissociation constants. **B:** Affinity plot of miR-155-5p showing a 'wobbled 7mer' as highest ranking non-canonical seed.

@@ -1,0 +1,121 @@
+---
+title: "archetypes"
+author: "Pierre-Luc Germain"
+date: "2/23/2021"
+output: html_document
+---
+
+```{r}
+suppressPackageStartupMessages({
+  library(scanMiR)
+  library(scanMiRData)
+  library(ggplot2)
+  library(ggrepel)
+  library(cowplot)
+  library(ggpointdensity)
+  library(viridis)
+})
+theme_set(theme_cowplot(font_size=12, rel_large=15/14))
+```
+
+#colors
+```{r}
+source("../misc.R")
+```
+
+
+
+```{r}
+mods <- getKdModels("hsa",categories = NULL)
+kd <- read.delim("/mnt/schratt/enrichMiR_data/miRNA_KD_CNN/predictions/hsa/hsa-miR-122-5p_kds.txt", colClasses = c(X12mer="character", log_kd="numeric", mir="factor", "mirseq"="factor", "aligned_type"=NULL, "best_stype"=NULL))
+mod <- getKdModel(kd)
+kd <- kd[grep("X",kd$X12mer,invert=TRUE),]
+kd2 <- assignKdType(kd$X12mer, mod)
+kd$compressed <- kd2$log_kd/1000
+
+set.seed(1234)
+kd2 <- kd[sample.int(nrow(kd), 100000),]
+p1a <- ggplot(kd2, aes(x=log_kd, y=compressed) ) +
+  geom_pointdensity(size=0.8, show.legend=FALSE) + scale_colour_viridis() + 
+  labs(x="Original log(KD)", y="Reconstituted log(KD)") + ggtitle("hsa-miR-122-5p") +
+  theme(legend.position = "top")
+
+d <- data.frame(row.names=names(mods), conservation=conservation(mods),
+                correlation=sapply(mods,FUN=function(x) x$cor))
+
+p1b <- ggplot(d, aes(correlation)) + 
+  geom_histogram(bins = 50, fill="darkblue") + 
+  xlab("Pearson correlation with original") + ggtitle("All human miRNAs")
+
+p1 <- plot_grid(p1a, p1b, labels="AUTO", rel_widths = c(5,3), scale=0.95)
+```
+
+
+```{r}
+mods <- getKdModels("hsa", categories = NULL)
+
+ms <- t(sapply(mods, FUN=function(mod, n=15){
+  mer8 <- getSeed8mers(mod$canonical.seed)
+  wA <- which(substr(mer8,8,8)=="A")
+  mer7 <- substr(mer8,1,7)
+  As <- mod$mer8[wA]
+  names(As) <- mer7[wA]
+  mer.mean <- rowsum(mod$mer8[-wA],mer7[-wA])[,1]/3
+  #gini <- ineq::Gini(1/10^(mer.mean/1000))
+  As <- As-mer.mean[names(As)]
+  d <- data.frame(seed=names(mer.mean), base=mer.mean/-1000, "A"=As[names(mer.mean)]/-1000,
+                  type=getMatchTypes(names(mer.mean),mod$canonical.seed), row.names=NULL)
+  d <- d[head(order(d$base, decreasing=TRUE),n=n),]
+  d$seed <- factor(as.character(d$seed), rev(as.character(d$seed)))
+  levels(d$type) <- scanMiR:::.matchLevels(FALSE)
+  topNC <- d[grep("g-bulged|non-canonical",d$type)[1],2]
+  d <- aggregate(d[,2,drop=FALSE], by=list(type=d[,4]), na.rm=TRUE, FUN=median)
+  d <- setNames(c(d[,2],topNC),c(as.character(d[,1]),"topNC"))
+  c(d[c("7mer","6mer","g-bulged 6mer","6mer-m8","topNC","non-canonical")])
+}))
+colnames(ms) <- c("m7","m6","gb_6mer","6mer_m8","topNC","median10NCs")
+ms <- as.data.frame(ms)
+ms$diff7 <- ms$m7-ms$m6
+ms$diff6 <- ms$m6-ms$topNC
+ms$diffNC <- ms$topNC-ms$median10NCs
+#ms$Gini1m <- -log10(1-ms$Gini)
+#mod <- loess(ms$Gini1m~ms$m7)
+#ms$Gini.dev <- ms$Gini1m-mod$fitted
+mod <- loess(ms$topNC~ms$m7)
+ms$topNC.dev <- ms$topNC - mod$fitted
+ms$miRNA <- row.names(ms)
+
+#scatterplot3d::scatterplot3d(ms$m7, ms$m6, ms$non_canonical, highlight.3d = TRUE, pch=16)
+#plgINS::plPCA(t(ms[,c(1,2,5)]), colorBy = ms$m6-ms$non_canonical, add.labels = FALSE)
+
+ggplot(ms, aes(m7, topNC)) + geom_abline(slope=1, colour="grey") + geom_point(aes(colour=diffNC)) + geom_label_repel(data=ms[order(ms$topNC.dev,decreasing=TRUE)[1:10],], aes(label=miRNA), min.segment.length = 0) + labs(x="-logKD of 7mer", y="-logKD of top non-canonical", colour="-logKD difference between top and 5th non-canonical") + theme(legend.position = "bottom")
+
+#ggplot(ms, aes(1-Gini, m7)) + geom_point(aes(colour=topNC.dev)) + geom_label_repel(data=ms[order(ms$Gini.dev,decreasing=TRUE)[1:10],], aes(label=miRNA), min.segment.length = 0) +scale_x_log10()
+```
+
+
+```{r, fig.width=10, fig.height=10}
+mirs <- c("hsa-miR-7-5p","hsa-miR-124-3p", "hsa-miR-499a-5p")
+#mirs <- c("hsa-miR-495-3p", "hsa-miR-124-3p", "hsa-miR-92b-5p")
+#mirs <- c("hsa-miR-214-5p","hsa-miR-124-3p", "hsa-miR-155-5p","hsa-miR-199a-5p")
+p2 <- ggplot(ms, aes(m6, topNC)) + geom_abline(slope=1, colour="grey") + geom_point(aes(colour=diffNC)) + geom_label_repel(data=ms[mirs,], aes(label=miRNA), nudge_x=c(-0.75,-0.75,0.8), nudge_y=c(0.3,0.75,-0.15)) + labs(x="median -log(KD) of 6mers", y="-log(KD) of top non-canonical", colour="log(KD) difference between\ntop and 5th non-canonical") + theme(legend.position = "bottom")
+ps <- lapply(mirs, FUN=function(x){
+  plotKdModel(mods[[x]], what = "seeds") + 
+    theme(axis.text.y = element_text(family="mono"), 
+          plot.subtitle=element_text(family="mono")) +
+    # scale_fill_manual(values=c("7mer"= darkgreen, "6mer"="#4477AA",
+    #                             "g-bulged 6mer"="#117733", "+A"="darkred",
+    #                             "non-canonical"=light,
+    #                            "g-bulged 7mer"= turquoise))
+      scale_fill_manual(values = type_cols)
+})
+ps[[1]] <- ps[[1]] + theme(legend.position = "none")
+ps[[3]] <- ps[[3]] + theme(legend.position = "none")
+plot_grid(p1a, p1b, p2, ps[[3]], ps[[2]], ps[[1]], 
+          ncol=2, rel_widths = c(5,4), rel_heights=c(3,4,4), scale=0.95, labels="AUTO")
+
+ggsave("Figure_2.png", height = 10,width = 8.5)
+ggsave("Figure_2.pdf", height = 10,width = 8.5)
+
+```
+

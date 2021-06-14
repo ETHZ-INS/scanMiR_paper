@@ -1,0 +1,81 @@
+---
+title: "isoCirc scanning"
+author: "Pierre-Luc Germain"
+date: "1/29/2021"
+output: html_document
+---
+
+```{r}
+devtools::load_all("/mnt/schratt/scanMir/")
+suppressPackageStartupMessages({
+  library(scanMiRData)
+  library(rtracklayer)
+  library(GenomicRanges)
+  library(BSgenome.Hsapiens.UCSC.hg19)
+  library(BiocParallel)
+})
+```
+
+# Sequences
+```{r}
+b <- import("isoCirc_all_hg19.ucsc.filtered.bed")
+seqs <- getSeq(BSgenome.Hsapiens.UCSC.hg19, blocks(b))
+seqs <- DNAStringSet(sapply(seqs, FUN=function(x) paste(as.character(x),collapse="")))
+
+seqs <- seqs[width(seqs)>12]
+sn <- names(seqs)
+seqs <- xscat(seqs,subseq(seqs,1,11))
+names(seqs) <- sn
+saveRDS(seqs,"hcircSeqs_processed.rds")
+```
+
+```{r}
+seqs <- readRDS("hcircSeqs_processed.rds")
+```
+
+
+# Get mods
+```{r}
+mods <- scanMiRData::getKdModels("hsa",c("Conserved across mammals","Conserved across vertebrates","Poorly conserved"))
+```
+
+# Scan
+```{r}
+m <- findSeedMatches(seqs, mods, onlyCanonical=TRUE,shadow=0L,p3.extra = TRUE, BP=MulticoreParam(12, progress=TRUE))
+saveRDS(m, file="canonical.GR.rds")
+
+m_TDMD <- m[m$note != "-"]
+saveRDS(m_TDMD,"human_circRNAs_canonical_TDMD.rds")
+```
+
+# CDR1As
+```{r}
+CDR1_seq <- seqs["hsa_circ_0001946"]
+mods_CDR1 <- mods[c("hsa-miR-7-5p","hsa-miR-671-5p")]
+m_CDR1 <- findSeedMatches(CDR1_seq, mods_CDR1, onlyCanonical=TRUE,shadow=0L,p3.extra = TRUE, BP=MulticoreParam(12, progress=TRUE),keepMatchSeq = TRUE,minDist = 0L)
+saveRDS(m_CDR1,"CDR1as_7_671_matches.rds")
+```
+
+
+# Slicing Circs
+```{r}
+m_Slicing <- m_TDMD[m_TDMD$note == "Slicing" | m_TDMD$note == "Slicing?" ,]
+mods_con <- scanMiRData::getKdModels("hsa",c("Conserved across mammals","Conserved across vertebrates"))
+m_Slicing_con <- m_Slicing[m_Slicing$miRNA %in% names(mods_con),]
+saveRDS(m_Slicing_con,"Slicing_Table_hCircs_cons_mir.rds")
+
+mods_302 <- mods_con[["hsa-miR-302a-3p"]]
+seqs1 <- seqs["hsa_circ_0092348"]
+Slice_Ex <- findSeedMatches(seqs1,mods_302,onlyCanonical=TRUE,shadow=0L,p3.extra = TRUE, BP=MulticoreParam(12, progress=TRUE),keepMatchSeq = TRUE,minDist = 0L)
+saveRDS(Slice_Ex,"Slicing_Example.rds")
+```
+
+
+
+
+# Session info
+
+```{r}
+devtools::session_info()
+```
+

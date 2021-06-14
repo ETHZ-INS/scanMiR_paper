@@ -1,0 +1,115 @@
+---
+title: "run_HEK"
+author: "Pierre-Luc Germain"
+date: "11/10/2020"
+output: html_document
+---
+
+
+
+```{r}
+suppressPackageStartupMessages({
+  library(Biostrings)
+  library(BiocParallel)
+  library(GenomicRanges)
+  library(ensembldb)
+  library(BSgenome.Hsapiens.UCSC.hg19)
+  library(scanMiRData)
+})
+devtools::load_all("/mnt/schratt/scanMir/")
+
+mods <- readRDS("/mnt/schratt/enrichMiR_data/miRNA_KD_lm_mods/hsa.rds")
+mods2 <- mods[c("hsa-miR-122-5p", "hsa-miR-133-3p", 
+"hsa-miR-138-5p", "hsa-miR-145-5p", "hsa-miR-184", "hsa-miR-190a-5p", 
+"hsa-miR-200b-3p", "hsa-miR-216a-5p", "hsa-miR-217-5p", "hsa-miR-219a-5p", 
+"hsa-miR-375-3p", "hsa-miR-451a")]
+mods2 <- KdModelList(mods2)
+
+g <- rtracklayer::import.gff("/mnt/schratt/enrichMir_datasets/bartel_assembly/HEK/GSE140217_HEK_transcriptannotations.gtf.gz")
+
+
+
+g <- g[g$type!="5UTR"]
+g <- as.list(split(g,strand(g)))
+g[["+"]] <- g[["+"]][order(start(g[["+"]]))]
+g[["-"]] <- g[["-"]][order(end(g[["-"]]),decreasing=TRUE)]
+g <- c(g[["+"]],g[["-"]])
+seqs <- extractTranscriptSeqs(BSgenome.Hsapiens.UCSC.hg19, split(g,g$transcript_id))
+g.cds <- g[g$type=="CDS"]
+orf.len <- sum(width(split(g.cds, g.cds$transcript_id)))
+mcols(seqs)$ORF.length <- orf.len[names(seqs)] + 15
+```
+
+
+
+#Prepare 10, 100 & 1000 seqs and save for the namings
+```{r}
+set.seed(123)
+names10 <- sample(names(seqs),10)
+saveRDS(names10,"namesSeqs10.rds")
+
+names100 <- sample(names(seqs),100)
+saveRDS(names100,"namesSeqs100.rds")
+
+names1000 <- sample(names(seqs),1000)
+saveRDS(names1000,"namesSeqs1000.rds")
+```
+
+
+#get seqs
+```{r}
+names10 <- readRDS("namesSeqs10.rds")
+names100 <- readRDS("namesSeqs100.rds")
+names1000 <- readRDS("namesSeqs1000.rds")
+
+seqs10 <- seqs[names10]
+seqs100 <- seqs[names100]
+seqs1000 <- seqs[names1000]
+
+props <- list( "10"=list(widths=width(seqs10)),
+               "100"=list(widths=width(seqs100)),
+               "1000"=list(widths=width(seqs1000))
+               )
+```
+
+
+#Get Times
+
+```{r}
+#10
+t10 <- system.time(findSeedMatches(seqs10, mods2, maxLogKd=NULL, BP = SerialParam(), ret="GRanges"))
+t10_mult <- system.time(m <- findSeedMatches(seqs10, mods2, maxLogKd=NULL, BP = MulticoreParam(12, progressbar=TRUE), ret="GRanges"))
+t10_mult2 <- system.time(findSeedMatches(seqs10, mods2, maxLogKd=NULL, BP = MulticoreParam(12, progressbar=TRUE), ret="GRanges"))
+t10_mult <- (t10_mult+t10_mult2)/2
+props$`10`$all.sites <- length(m)
+props$`10`$can.sites <- length(m[m$type %in% c("8mer","7mer-m8","7mer-a1","6mer","6mer-m8","6mer-a1")])
+```
+
+
+```{r}
+#100
+t100 <- system.time(findSeedMatches(seqs100, mods2, maxLogKd=NULL, BP = SerialParam(), ret="GRanges"))
+t100_mult <- system.time(m <- findSeedMatches(seqs100, mods2, maxLogKd=NULL, BP = MulticoreParam(12, progressbar=TRUE), ret="GRanges"))
+t100_mult2 <- system.time(findSeedMatches(seqs100, mods2, maxLogKd=NULL, BP = MulticoreParam(12, progressbar=TRUE), ret="GRanges"))
+t100_mult <- (t100_mult+t100_mult2)/2
+props$`100`$all.sites <- length(m)
+props$`100`$can.sites <- length(m[m$type %in% c("8mer","7mer-m8","7mer-a1","6mer","6mer-m8","6mer-a1")])
+```
+
+
+
+```{r}
+t1000 <- system.time(findSeedMatches(seqs1000, mods2, maxLogKd=NULL, BP = SerialParam(), ret="GRanges"))
+t1000_mult <- system.time(m <- findSeedMatches(seqs1000, mods2, maxLogKd=NULL, BP = MulticoreParam(12, progressbar=TRUE), ret="GRanges"))
+props$`1000`$all.sites <- length(m)
+props$`1000`$can.sites <- length(m[m$type %in% c("8mer","7mer-m8","7mer-a1","6mer","6mer-m8","6mer-a1")])
+```
+
+
+#list and save
+```{r}
+scanMIR.time <- list(t10,t100,t1000,t10_mult,t100_mult,t1000_mult)
+saveRDS(scanMIR.time,"scanMiR_time_table.rds")
+saveRDS(props, "props.rds")
+```
+

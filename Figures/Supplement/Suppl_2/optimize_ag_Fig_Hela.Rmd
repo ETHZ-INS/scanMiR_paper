@@ -1,0 +1,137 @@
+---
+title: "opt_ag_Figure"
+author: "Michael Soutschek"
+date: "29 1 2021"
+output: html_document
+---
+
+
+
+```{r}
+suppressPackageStartupMessages({
+  library(BiocParallel)
+  library(rtracklayer)
+  library(GenomicRanges)
+  library(ensembldb)
+  library(BSgenome.Hsapiens.UCSC.hg19)
+  library(org.Hs.eg.db)
+  library(data.table)
+  library(ggplot2)
+  library(tidyverse)
+})
+```
+
+
+```{r}
+source("~/scanMir/R/aggregation.R")
+```
+
+
+
+
+# Helper Functions
+```{r}
+domnorm <- function(x, useMedian=TRUE){
+  y <- setNames(seq_len(ncol(x)), colnames(x))
+  if(useMedian){
+    x <- as.data.frame(lapply(y, FUN=function(i){
+      x[,i]-matrixStats::rowMedians(as.matrix(x[,-i]))
+    }), row.names=row.names(x))
+  }else{
+    x <- as.data.frame(lapply(y, FUN=function(i) x[,i]-rowMeans(x[,-i])), row.names=row.names(x), check.names = FALSE)
+  }  
+  x
+}
+
+
+getPreds <- function(ag=ag, m=m, normalize=TRUE, useMedian = FALSE){
+  m_agg <- aggregateSites(m = m, ag = ag)
+  m_repr <- pivot_wider(m_agg,id_cols = transcript, names_from = miRNA, values_from = repression, values_fill = list(repression = 0))
+  m_repr <- column_to_rownames(m_repr, var = "transcript")
+  if(normalize) m_repr <- domnorm(m_repr, useMedian = useMedian)
+  m_repr
+}
+
+get_cor <- function(ag,obs = obs,repr = NULL,mir = mir, mir_names = mir_names, m=NULL,return.raw = FALSE) {
+  if(is.null(repr)) repr <- getPreds(ag=ag, m=m, normalize=TRUE, useMedian = FALSE)
+  cor_df <- merge(obs[,mir, drop = FALSE],repr[,mir_names[mir_names == mir], drop = FALSE], by = 0, all.x = TRUE)
+  colnames(cor_df) <- c("transcript", "obs","pred")
+  cor_df[["pred"]][is.na(cor_df[["pred"]])] <- 0
+  if(return.raw) {
+    return(cor_df)
+  }else{
+    cor = cor.test(cor_df$obs, cor_df$pred, method="pearson")
+    return(cor$estimate^2)
+  }
+}
+
+
+get_cor_vec <- function(ag_vec,mir,m,obs = obs, mir_names) {
+  cor_vec <- sapply(ag_vec, get_cor,m = m, mir_names = mir_names, obs = obs, mir = mir)
+  return(cor_vec)
+} 
+
+```
+
+
+
+# Hela mir-124
+
+# Define miRs & load Data
+```{r}
+# Mir
+hela_mirs <- c("hsa-miR-1-3p","hsa-miR-155-5p","hsa-miR-124-3p","hsa-miR-7-5p","hsa-miR-137-3p","hsa-miR-139-5p", "hsa-miR-143-3p","hsa-miR-144-3p","hsa-miR-153-3p","hsa-miR-182-5p","hsa-miR-199a-5p","hsa-miR-204-5p", "hsa-miR-205-5p","hsa-miR-216b-5p","hsa-miR-223-3p","cel-lsy-6") 
+
+mir124 <- "hsa-miR-124-3p"
+
+
+# Load Data
+m <- readRDS(file = "../../../Parameter_Optimization/data/hsa.12mirs.HELA.fullScan.GR.rds")
+m_names <- m
+m_names$transcript <- as.factor(seqnames(m))
+m_names <- split(mcols(m_names), m_names$miRNA)
+
+ob <- read.delim("../../../Parameter_Optimization/data/McGeary_2019_raw/GSE140217_HeLa_transfection_logtpm_batchnormalized.txt", row.names=1)
+ob <- ob[,-which(names(ob) %in% c("let7"))]
+ob <- domnorm(ob)
+colnames(ob) <- names(m_names)
+```
+
+
+
+# Get the optimal ag correlation
+```{r}
+ag_vec <- log_ag_vec <- seq(-10,5, length.out = 30)
+cor <- get_cor_vec(ag_vec, mir = mir124,m = m, mir_names = hela_mirs, obs = ob)
+
+cor_df <- data.frame(ag = ag_vec, r2=cor)
+cor_df$type <- "hsa-miR-124-5p"
+saveRDS(cor_df, "mir124_hela_cor_df.rds")
+
+ggplot(cor_df, aes(x = ag, y = r2)) + 
+  geom_line(size = 1) +
+  theme_bw() +
+  ylab('r^2') +
+  ggtitle("mir124") + 
+  theme_classic() + 
+  xlab("log(ag)")
+
+ggsave("mir124_hela_opt_ag.png")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

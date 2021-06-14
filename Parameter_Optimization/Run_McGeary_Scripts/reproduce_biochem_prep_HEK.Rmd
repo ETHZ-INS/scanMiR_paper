@@ -1,0 +1,95 @@
+---
+title: "Evaluations of KD aggregation methods"
+author: "Fridolin Gross"
+date: "`r Sys.Date()`"
+output:
+  rmdformats::readthedown:
+    highlight: tango
+    self_contained: true
+    thumbnails: true
+    lightbox: true
+    gallery: false
+    keep_md: no
+    number_sections: yes
+    fig_width: 8
+    fig_height: 8
+    fig_caption: true
+    df_print: paged
+    code_folding:	hide
+---
+
+# required packages:
+```{r}
+suppressPackageStartupMessages({
+  library(ensembldb)
+	library(AnnotationHub)
+	library(BSgenome)
+  library(org.Hs.eg.db)
+  library(BSgenome.Hsapiens.UCSC.hg19)
+  library(BSgenome.Hsapiens.UCSC.hg38)
+  library(openxlsx)
+  library(scanMiR)
+  library(data.table)
+  library(tidyverse)  
+  })
+```
+
+
+### Prepare miRNA sequence file
+```{r}
+miRNA_seqs <- read.xlsx("../data/aav1741_DataS1.xlsx", rows=131:142, colNames = FALSE)
+miRNA_seqs_pass <- read.xlsx("../data/aav1741_DataS1.xlsx", rows=144:155, colNames = FALSE)
+miRNA_seqs <- miRNA_seqs %>%
+  mutate(mir = gsub("[\\(\\)]", "", X1)) %>%
+  mutate(guide_seq = gsub("U", "T", X2)) %>%
+  select(-X1, -X2) %>%
+  mutate(guide_family = mir)
+
+miRNA_seqs_pass <- miRNA_seqs_pass %>%
+  select(-X3) %>%
+  mutate(mir = gsub("[\\(\\)]", "", X1)) %>%
+  mutate(mir = gsub("\\*.*", "", mir)) %>%
+  mutate(pass_seq = gsub("U", "T", X2)) %>%
+  mutate(pass_family = gsub("$", "_pass", mir)) %>%
+  select(-X1, -X2)
+
+miRNA_seqs <- merge(miRNA_seqs, miRNA_seqs_pass, by="mir") %>%
+  select(mir, guide_seq,	pass_seq, guide_family, pass_family)
+
+write.table(miRNA_seqs, "./inputs/mirseqs_hek.txt", quote=F, sep="\t", row.names = F)
+```
+
+
+### Using Bartel's annotation
+
+```{r}
+g <- rtracklayer::import.gff("../data/McGeary_2019_raw/GSE140218_HEK293_transcriptannotations.gtf")
+```
+
+```{r}
+gr_cds <- g[g$type=="CDS"]
+gr_cds <- split(gr_cds,gr_cds$transcript_id)
+gr_UTR <- g[g$type=="3UTR"]
+gr_UTR <- split(gr_UTR, gr_UTR$transcript_id)
+
+seq_cds <- extractTranscriptSeqs(BSgenome.Hsapiens.UCSC.hg19, gr_cds)
+seq_UTR <- extractTranscriptSeqs(BSgenome.Hsapiens.UCSC.hg19, gr_UTR)
+
+df_transcripts <- data.frame(
+           transcript = names(seq_UTR),
+           orf = as.character(seq_cds[names(seq_UTR)]),
+           orf_length = width(seq_cds[names(seq_UTR)]),
+           utr3 = as.character(seq_UTR),
+           utr3_length = width(seq_UTR)
+           )
+df_transcripts$orf_utr3 <- paste(df_transcripts$orf, df_transcripts$utr3, sep="")
+write.table(df_transcripts, "hek_transcripts_anB.txt", 
+            sep="\t", quote=F, row.names = F)
+
+orf_utr3 <- df_transcripts$orf_utr3
+names(orf_utr3) <- df_transcripts$transcript
+writeXStringSet(DNAStringSet(orf_utr3),"hek_orf_utr3_anB.fa")
+
+
+```
+

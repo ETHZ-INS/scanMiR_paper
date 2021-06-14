@@ -1,0 +1,124 @@
+---
+title: "Targetscan_Corr_HEK"
+author: "Michael Soutschek"
+date: "24 2 2021"
+output: html_document
+---
+
+
+
+```{r}
+library(tidyverse)
+library(data.table)
+```
+
+
+# Helper Functions
+```{r}
+
+domnorm <- function(x, useMedian=TRUE){
+  y <- setNames(seq_len(ncol(x)), colnames(x))
+  if(useMedian){
+    x <- as.data.frame(lapply(y, FUN=function(i){
+      x[,i]-matrixStats::rowMedians(as.matrix(x[,-i]))
+    }), row.names=row.names(x))
+  }else{
+    x <- as.data.frame(lapply(y, FUN=function(i) x[,i]-rowMeans(x[,-i])), row.names=row.names(x), check.names = FALSE)
+  }  
+  x
+}
+
+get_cor_targetscan <- function(mir_names,mir, ob, tar, return.raw = FALSE){
+    tar_wide <- pivot_wider(tar,id_cols = Gene_ID, names_from = miRNA_family , values_from = bounded_score, values_fill = list(bounded_score = 0))
+    tar_wide <- column_to_rownames(tar_wide, var = "Gene_ID")
+    subs_mir <- mir_names[mir_names!=mir]
+    tar_mir <- tar_wide[mir] - rowMeans(tar_wide[subs_mir], na.rm = TRUE)
+    ob_mir <- ob[mir]
+    colnames(ob_mir) <- "logTPM"
+    tar_mir <- merge(ob_mir,tar_mir,by = 0, all.x = TRUE)
+    tar_mir[[mir]][is.na(tar_mir[[mir]])] <- 0
+    if(return.raw){
+      return(tar_mir)
+    }else{
+    cor = cor.test(tar_mir[[mir]], tar_mir$logTPM, method="pearson")
+    return(cor$estimate^2)
+    }
+  }
+```
+
+
+
+# Load Data
+```{r}
+
+hek_mirs <- c("hsa-miR-122-5p", "hsa-miR-133a-3p.1", 
+"hsa-miR-138-5p", "hsa-miR-145-5p", "hsa-miR-184", "hsa-miR-190a-5p", 
+"hsa-miR-200b-3p", "hsa-miR-216a-5p", "hsa-miR-217", "hsa-miR-219a-5p", 
+"hsa-miR-375", "hsa-miR-451a")
+
+#score and weighted score are the same in this table
+tar <- fread("./Output/predictions.txt")
+# test1 <- fread("./Output/weighted_features.txt")
+# test2 <- fread("./Output/HEK_sites_out.csv")
+# test3 <- fread("./Output/HEK_features_out.csv")
+
+# test22 <- test2[test2$`miRNA family` %in% hMiR_hek$`miR family`,]
+# test222 <- test22[test22$`Gene ID` %in% row.names(ob),]
+
+hMiR <- fread("/mnt/schratt/scanMiR_paper_scripts/Targetscan_Corr/Run_Targetscan/Targetscan/Raw_Files/miR_Family_Info.txt")
+
+
+ob <- read.delim("../../Parameter_Optimization/data/McGeary_2019_raw/GSE140218_HEK293FT_transfection_logtpm_batchnormalized.txt", row.names=1)
+```
+
+
+# Filter Data
+
+```{r}
+hMiR_hek <- hMiR[hMiR$`MiRBase ID` %in% hek_mirs,]
+
+tar_hek <- tar[tar$miRNA_family %in% hMiR_hek$`miR family`,]
+tar_hek <- tar_hek[tar_hek$Gene_ID %in% row.names(ob),]
+
+hek_fams <- as.character(levels(as.factor(tar_hek$miRNA_family)))
+```
+
+
+
+
+# Prepare Data
+```{r}
+ob <- domnorm(ob)
+colnames(ob) <- hek_fams # unsafe 
+```
+
+
+
+# Correlate
+```{r}
+tar_cor <- list()
+for(mir in hek_fams){
+  cor <- get_cor_targetscan(mir_names = hek_fams, mir = mir,ob = ob, tar = tar_hek)
+  tar_cor[[mir]]["r2"] <- cor
+}
+
+tar_df <- as.data.frame(t(as.data.frame(tar_cor)))
+tar_df$condition <- "tar"
+tar_df$mir <- row.names(tar_df)
+saveRDS(tar_df,"Targetscan_corr_hek.rds")
+
+tar_dt <- data.table()
+for(mir in hek_fams){
+  dt <- get_cor_targetscan(mir_names = hek_fams, mir = mir,ob = ob, tar = tar_hek,return.raw = TRUE)
+  colnames(dt) <- c("transcript","observed","predicted")
+  tar_dt <- rbind(tar_dt,dt)
+}
+
+saveRDS(tar_dt,"Targetscan_corr_raw_hek.rds")
+```
+
+
+
+
+
+

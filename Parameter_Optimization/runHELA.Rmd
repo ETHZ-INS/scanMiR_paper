@@ -1,0 +1,69 @@
+---
+title: "run_HELA"
+author: "Pierre-Luc Germain"
+date: "11/10/2020"
+output: html_document
+---
+
+
+
+```{r}
+suppressPackageStartupMessages({
+  library(Biostrings)
+  library(BiocParallel)
+  library(GenomicRanges)
+  library(ensembldb)
+  library(BSgenome.Hsapiens.UCSC.hg19)
+  library(scanMiR)
+  library(scanMiRData)
+})
+```
+
+
+```{r}
+#get mirNames
+## exclude lsy-6 and let-7
+
+# miRNA_seqs <- read.xlsx("data/McGeary_2019_raw/aav1741_DataS1.xlsx", rows=95:111, colNames = FALSE)
+# miRNA_seqs <- miRNA_seqs %>%
+#   mutate(mir = gsub("[\\(\\)]", "", X1)) %>%
+#   mutate(guide_seq = gsub("U", "T", X2)) %>%
+#   select(-X1, -X2)
+# miRNA_seqs <- miRNA_seqs[miRNA_seqs$mir != "hsa-let-7a",]
+# 
+# hela_mirs <- miRNA_seqs$mir
+# hela_mirs[hela_mirs == "hsa-miR-1"] <- "hsa-miR-1-3p"
+# hela_mirs[hela_mirs == "hsa-miR-137"] <- "hsa-miR-137-3p"
+
+hela_mirs <- c("hsa-miR-1-3p","hsa-miR-155-5p","hsa-miR-124-3p","hsa-miR-7-5p","hsa-miR-137-3p","hsa-miR-139-5p", "hsa-miR-143-3p","hsa-miR-144-3p","hsa-miR-153-3p","hsa-miR-182-5p","hsa-miR-199a-5p","hsa-miR-204-5p",
+  "hsa-miR-205-5p","hsa-miR-216b-5p","hsa-miR-223-3p","cel-lsy-6") 
+
+mods <- scanMiRData::getKdModels("hsa",NULL)
+mods_1b <- readRDS("Run_McGeary_Scripts/outputs/kds/cel_lsy_6.rds")
+mods <- c(mods,mods_1b)
+mods2 <- mods[hela_mirs]
+
+```
+
+
+
+```{r}
+g <- rtracklayer::import.gff("data/McGeary_2019_raw/GSE140217_HeLa_transcriptannotations.gtf.gz")
+g <- g[g$type!="5UTR"]
+g <- as.list(split(g,strand(g)))
+g[["+"]] <- g[["+"]][order(start(g[["+"]]))]
+g[["-"]] <- g[["-"]][order(end(g[["-"]]),decreasing=TRUE)]
+g <- c(g[["+"]],g[["-"]])
+seqs <- extractTranscriptSeqs(BSgenome.Hsapiens.UCSC.hg19, split(g,g$transcript_id))
+g.cds <- g[g$type=="CDS"]
+orf.len <- sum(width(split(g.cds, g.cds$transcript_id)))
+mcols(seqs)$ORF.length <- orf.len[names(seqs)] + 15
+m <- findSeedMatches(seqs, mods2, maxLogKd=NULL, BP = MulticoreParam(12, progressbar=TRUE), ret="GRanges",p3.extra=TRUE,p3.params=list(maxMirLoop=5L, maxTargetLoop=9L, 
+                                            maxLoopDiff=4L, mismatch=TRUE),)
+saveRDS(m, file="./data/hsa.12mirs.HELA.fullScan.GR.rds")
+
+# save the indexed fst
+# d <- as.data.frame(m)
+# d$width <- d$strand <- NULL
+# saveIndexedFst(d, "miRNA", "hsa.HEK.fullScan", nthreads=3)
+```

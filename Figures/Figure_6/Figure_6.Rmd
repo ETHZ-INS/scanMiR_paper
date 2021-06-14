@@ -1,0 +1,69 @@
+---
+title: "Figure 6 - Enriched miRNA-circRNA pairs"
+author: "Pierre-Luc Germain"
+date: "4/7/2021"
+output: html_document
+---
+
+```{r}
+suppressPackageStartupMessages({
+  library(ggplot2)
+  library(ggrepel)
+  library(cowplot)
+})
+theme_set(theme_cowplot(font_size = 12))
+```
+
+# Circ Enrichment 
+```{r}
+e <- readRDS("../../circRNAs/Mouse/enrichment.scores.7and8mers.rds")
+
+mirexp <- read.delim("../../circRNAs/Mouse/Normalized miRNA Brain expression from Chiang et al. 2010_.csv", sep=",")
+mirexp <- sapply(split(mirexp[,2], mirexp[,1]), na.rm=TRUE, FUN=max)
+e$mirexp <- mirexp[as.character(e$set)]
+e <- e[e$sites>5,]
+saveRDS(e, file="supp_table_sponges.rds")
+e <- e[e$mirexp>=100,]
+
+levels(e$feature)[grep("^C230004F18Rik",levels(e$feature))] <- "Cdr1as"
+e <- e[order(e$logp.binom*-log10(e$expression), decreasing=TRUE),]
+e$gene <- gsub("\\.[0-9]+$","",as.character(e$feature))
+etop <- e[e$expression>10,]
+etop <- etop[etop$gene %in% head(unique(etop$gene),8),]
+etop <- etop[!duplicated(etop$gene),]
+etop$lab <- paste(etop$gene, gsub("mmu-","",etop$set), sep="\n")
+
+e$gene[!(e$gene %in% etop$gene)] <- "other"
+e$gene <- factor(e$gene, unique(e$gene))
+
+cols <- c("#332288", "#88CCEE", "#44AA99", "#117733", "#999933", "#DDCC77", 
+"#CC6677", "#AA4499","grey")
+names(cols) <- levels(e$gene)
+
+
+p <- ggplot(e, aes(expression, -logp.binom+1)) + 
+  geom_point(aes(colour=gene, size=sites, alpha=gene!="other")) + 
+  scale_alpha_manual(values=c("TRUE"=0.5,"FALSE"=0.25), guide=FALSE) +
+  scale_x_log10() + scale_y_log10() + scale_color_manual(values=cols) +
+  labs(x="circRNA expression in the brain (BSJ counts)", 
+       y="-log(binomial p.value)", colour="Host gene") +
+  geom_point(data=etop, aes(colour=gene, size=sites)) + 
+  geom_text_repel(data=etop, aes(label=lab), min.segment.length = 0) +
+  ggtitle("circRNA-miRNA enrichment")
+```
+
+
+```{r, fig.width=8, fig.height=4}
+p
+ggsave("Figure_6.png",p,width=8, height = 4)
+ggsave("Figure_6.pdf",p,width=8, height = 4)
+```
+
+
+
+
+
+
+
+
+

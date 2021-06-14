@@ -1,0 +1,70 @@
+---
+title: "Mouse brain circRNA scanning"
+author: "Pierre-Luc Germain"
+date: "1/29/2021"
+output: html_document
+---
+
+```{r}
+suppressPackageStartupMessages({
+  library(scanMiR)
+  library(scanMiRData)
+  library(rtracklayer)
+  library(GenomicRanges)
+  library(BSgenome.Mmusculus.UCSC.mm10)
+  library(BiocParallel)
+})
+```
+
+# Sequences
+
+```{r}
+g <- import("mouse_brain_circRNAs.gtf.gz")
+tmp <- strsplit(g$isoform,"|",fixed=TRUE)
+g <- g[rep(seq_along(g),lengths(tmp))]
+g$isoform <- unlist(tmp)
+tmp <- strsplit(g$isoform,",",fixed=TRUE)
+tmp <- lapply(tmp, FUN=function(x){
+  x <- lapply(strsplit(x,"-",fixed=TRUE), as.integer)
+  IRanges(sapply(x,FUN=function(x) x[1]),
+          sapply(x,FUN=function(x) x[2]))
+})
+
+g2 <- g[rep(seq_along(g), lengths(tmp))]
+tmp2 <- unlist(IRangesList(tmp))
+start(g2) <- start(tmp2)
+end(g2) <- end(tmp2)
+
+g2 <- GRangesList(split(g2,paste(g2$circ_id, g2$isoform)))
+g2 <- g2[sum(width(g2))>20]
+g2 <- keepStandardChromosomes(g2, pruning.mode = "coarse")
+
+seqs <- getSeq(BSgenome.Mmusculus.UCSC.mm10, g2)
+seqs <- DNAStringSet(sapply(seqs, FUN=function(x) paste(as.character(x),collapse="")))
+
+sn <- names(seqs)
+seqs <- xscat(seqs,subseq(seqs,1,11))
+names(seqs) <- sn
+saveRDS(seqs,"mcircSeqs_processed.rds")
+```
+
+```{r}
+seqs <- readRDS("mcircSeqs_processed.rds")
+```
+
+
+# Scan
+```{r}
+mods <- getKdModels("mmu", c("Conserved across mammals","Conserved across vertebrates","Poorly conserved"))
+m <- findSeedMatches(seqs, mods, onlyCanonical=TRUE, BP=MulticoreParam(12,progressbar = TRUE),verbose=TRUE,
+                             useTmpFiles=TRUE, keepTmpFiles="/mnt/schratt/tmp/")
+
+saveRDS(m, file="canonical.GR.rds")
+```
+
+
+# Session info
+```{r}
+devtools::session_info()
+```
+

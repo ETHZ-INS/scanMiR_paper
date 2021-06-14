@@ -1,0 +1,529 @@
+---
+title: "Opt_log_kd_cutoff"
+author: "Michael Soutschek"
+date: "20 11 2020"
+output: html_document
+---
+
+
+# Get the Load the Aggregate_Biochem Function directly here
+```{r}
+aggregateMatches_Biochem <- function(e , kd_cut_off = -0.3, ORF = TRUE, coef_back = 0, keepSiteInfo = FALSE){
+  
+  ag <- -5.013868
+  b <- 0.8655766248703003
+  c <- -1.848806619644165
+  m <- as.data.frame(mcols(e))
+  m$transcript <- as.factor(seqnames(e))
+  m <- as.data.table(m)
+  
+  m$log_kd <- m$log_kd / 1000
+  
+  if(ORF) {
+    m$c <- ifelse(m$ORF=="TRUE", c, 0)
+    m$cut <- ifelse(m$ORF=="TRUE", (kd_cut_off  + c/2), kd_cut_off)
+    m <- m[m$log_kd < m$cut,]
+  }else{
+    m$c <- 0
+    m <- m[m$log_kd < kd_cut_off,]
+  }
+  
+  #m <- m[m$log_kd < kd_cut_off,]
+  m$ag <- ag
+  m$log_ka <- -m$log_kd
+  m$N <- 1 / (1 + exp(-1 * (m$ag + m$log_ka + m$c)))
+  m$N_bg <- 1 / (1 + exp(-1 * (m$ag  + m$c + coef_back)))
+  m_agg <- m[,.(N = sum(N),N_bg = sum(N_bg)),by = c("transcript","miRNA")]
+  
+  if(keepSiteInfo){
+    m_agg2 <- dcast( m[,.(N=.N), by=c("transcript","miRNA","type")],
+                     formula=transcript+miRNA~type, value.var="N", fill=0)
+    m_agg <- merge(m_agg, m_agg2, by=c("transcript","miRNA"), all=TRUE)
+  }
+  
+  m_agg$repression <- log(1 + exp(b)*m_agg$N_bg) - log(1 + exp(b)*m_agg$N)
+  return(m_agg)
+} 
+```
+
+
+
+
+
+# Correlation function
+```{r}
+get_cor_us <- function(cut_off, mir, return.raw = FALSE){
+  
+  # Get all files and connections
+  m <- readRDS(file = "/mnt/schratt/miRNA_KD/ms_test/hsa.12mirs.HEK.fullScan.GR.rds")
+  hek_tpm <- read.csv("/mnt/schratt/miRNA_KD/EnrichMir_Work/Aggregate_fg/bartel_data/GSE140218_HEK293FT_transfection_logtpm_batchnormalized.txt", sep="\t", stringsAsFactors = F, row.names = 1)
+  seeds <- gsub("\\.txt", "", list.files("/mnt/schratt/miRNA_KD/EnrichMir_Work/Aggregate_fg/predictions_anB/", full.names = F))
+  
+  # relate different miRNA IDs
+  mirs_alt <- gsub("hsa-", "", seeds)
+  mirs_alt <- gsub("-[35]p.*", "", mirs_alt)
+  mirs_alt <- gsub("R-", "r", mirs_alt)
+  
+  seeds[seeds == "hsa-miR-184-3p"] <- "hsa-miR-184"
+  names(mirs_alt) <- seeds
+    
+  
+  # Get mean-centered hek-values and the aggregation
+  # 1) get the seed info
+  mir_seeds <- names(mirs_alt)[mirs_alt==mir]
+  # 2) get the tpm values per mir
+  subs_mir <- names(hek_tpm)[names(hek_tpm) != mir]
+  hek_mir <- data.frame(
+    logTPM = hek_tpm[[mir]]-rowMeans(hek_tpm[subs_mir]),
+    transcript_id = row.names(hek_tpm),
+    stringsAsFactors = F,
+    row.names = rownames(hek_tpm)
+    ) 
+  
+  # 3) aggregate
+  m_agg <- aggregateMatches_Biochem(e = m, kd_cut_off = cut_off)
+  m_agg_slim <- m_agg[,c(1,2,5)]
+  m_repr <- pivot_wider(m_agg,id_cols = transcript, names_from = miRNA, values_from = repression, values_fill = list(repression = 0))
+  m_repr <- column_to_rownames(m_repr, var = "transcript")
+
+  # 4) get the correlation
+  subs_mir2 <- names(mirs_alt)[mirs_alt!=mir]
+  m_repr_mir <- m_repr[mir_seeds] - rowMeans(m_repr[subs_mir2], na.rm = TRUE)
+  repr_mir <- merge(hek_mir,m_repr_mir,by = 0, all.x = TRUE )
+  repr_mir[[mir_seeds]][is.na(repr_mir[[mir_seeds]])] <- 0
+  if(return.raw) {
+    return(repr_mir)
+  }else{
+    cor = cor.test(repr_mir[[mir_seeds]], repr_mir$logTPM, method="pearson")
+    return(cor$estimate^2)
+  }
+}
+
+get_cor_vec_us <- function(cut_vec, mir) {
+  cor_vec <- sapply(cut_vec, get_cor_us, mir)
+  return(cor_vec)
+} 
+
+```
+
+
+
+# Get the cut_off correlation for mir122 (us)
+```{r}
+cut_vec <- seq(-2,0, length.out = 40)
+
+cor <- get_cor_vec_us(cut_vec, mir = "mir122")
+cor_df <- data.frame(cut_off = cut_vec, r2=cor)
+cor_df1 <- cor_df
+
+ggplot(cor_df, aes(x = cut_off, y = r2)) + 
+  geom_line(size = 1) +
+  theme_bw() +
+  ylab('r^2') +
+  ggtitle("mir122")
+
+ggsave("cut_off_correlation_mir122.png")
+gc()
+```
+
+# Get the cut_off correlation for mir138 (us)
+```{r}
+cut_vec <- seq(-2,0, length.out = 40)
+
+cor <- get_cor_vec_us(cut_vec, mir = "mir138")
+cor_df <- data.frame(cut_off = cut_vec, r2=cor)
+cor_df2 <- cor_df
+
+ggplot(cor_df, aes(x = cut_off, y = r2)) + 
+  geom_line(size = 1) +
+  theme_bw() +
+  ylab('r^2') +
+  ggtitle("mir138")
+
+ggsave("cut_off_correlation_mir138.png")
+gc()
+```
+
+# Get the cut_off correlation for mir216a (us)
+```{r}
+cut_vec <- seq(-2,0, length.out = 40)
+
+cor <- get_cor_vec_us(cut_vec, mir = "mir216a")
+cor_df <- data.frame(cut_off = cut_vec, r2=cor)
+cor_df3 <- cor_df
+
+ggplot(cor_df, aes(x = cut_off, y = r2)) + 
+  geom_line(size = 1) +
+  theme_bw() +
+  ylab('r^2') +
+  ggtitle("mir216a")
+
+ggsave("cut_off_correlation_mir216a.png")
+gc()
+```
+
+
+
+# Get all cut-off values
+```{r}
+# Get all files
+seeds <- gsub("\\.txt", "", list.files("/mnt/schratt/miRNA_KD/EnrichMir_Work/Aggregate_fg/predictions_anB/", full.names = F))
+
+# relate different miRNA IDs
+mirs_alt <- gsub("hsa-", "", seeds)
+mirs_alt <- gsub("-[35]p.*", "", mirs_alt)
+mirs_alt <- gsub("R-", "r", mirs_alt)
+
+seeds[seeds == "hsa-miR-133-3p"] <- "hsa-miR-133a-3p"
+seeds[seeds == "hsa-miR-184-3p"] <- "hsa-miR-184"
+names(mirs_alt) <- seeds
+
+
+# get optimal for all mirs
+cut_off_list <- list()
+cut_vec <- seq(-2,0, length.out = 40)
+for(mirna in mirs_alt) {
+  cor <- get_cor_vec_us(cut_vec, mir = mirna)
+  cor_df <- data.frame(cut_off = cut_vec, r2=cor)
+  cor_df <- cor_df[which(cor_df$r2 > 0.99*max(cor_df$r2)),]
+  cut_off <- min(cor_df$cut_off)
+  cut_off_list[[mirna]]["cutoff"] <- cut_off
+}
+
+saveRDS(cut_off_list,"cut_off_list_99.rds")
+```
+
+
+
+
+
+# Get the cut_off correlation for mir122 (us) with a different ORF value
+```{r}
+cut_vec <- seq(-2,0, length.out = 40)
+
+cor <- get_cor_vec_us(cut_vec, mir = "mir122")
+cor_df <- data.frame(cut_off = cut_vec, r2=cor)
+cor_df1 <- cor_df
+
+ggplot(cor_df, aes(x = cut_off, y = r2)) + 
+  geom_line(size = 1) +
+  theme_bw() +
+  ylab('r^2') +
+  ggtitle("mir122")
+
+ggsave("cut_off_correlation_mir122_ORF.png")
+gc()
+```
+
+
+
+
+# Get the cut_off correlation for mir122 (us) with a different ORF value
+```{r}
+cut_vec <- seq(-2,0, length.out = 40)
+
+cor <- get_cor_vec_us(cut_vec, mir = "mir122")
+cor_df <- data.frame(cut_off = cut_vec, r2=cor)
+cor_df1 <- cor_df
+
+ggplot(cor_df, aes(x = cut_off, y = r2)) + 
+  geom_line(size = 1) +
+  theme_bw() +
+  ylab('r^2') +
+  ggtitle("mir122")
+
+ggsave("cut_off_correlation_mir122_ORF2.png")
+gc()
+```
+
+
+
+# Get the cut_off correlation for mir138 (us) with a different ORF value
+```{r}
+cut_vec <- seq(-2,0, length.out = 40)
+
+cor <- get_cor_vec_us(cut_vec, mir = "mir138")
+cor_df <- data.frame(cut_off = cut_vec, r2=cor)
+cor_df1 <- cor_df
+
+ggplot(cor_df, aes(x = cut_off, y = r2)) + 
+  geom_line(size = 1) +
+  theme_bw() +
+  ylab('r^2') +
+  ggtitle("mir138")
+
+ggsave("cut_off_correlation_mir138_ORF.png")
+gc()
+```
+
+
+
+# Get the cut_off correlation for mir216a (us) with a different ORF value
+```{r}
+cut_vec <- seq(-2,0, length.out = 40)
+
+cor <- get_cor_vec_us(cut_vec, mir = "mir216a")
+cor_df <- data.frame(cut_off = cut_vec, r2=cor)
+cor_df1 <- cor_df
+
+ggplot(cor_df, aes(x = cut_off, y = r2)) + 
+  geom_line(size = 1) +
+  theme_bw() +
+  ylab('r^2') +
+  ggtitle("mir216a")
+
+ggsave("cut_off_correlation_mir216a_ORF2.png")
+gc()
+```
+
+
+
+
+
+
+
+
+# Get all cut-off values
+```{r}
+# Get all files
+seeds <- gsub("\\.txt", "", list.files("/mnt/schratt/miRNA_KD/EnrichMir_Work/Aggregate_fg/predictions_anB/", full.names = F))
+
+# relate different miRNA IDs
+mirs_alt <- gsub("hsa-", "", seeds)
+mirs_alt <- gsub("-[35]p.*", "", mirs_alt)
+mirs_alt <- gsub("R-", "r", mirs_alt)
+
+seeds[seeds == "hsa-miR-133-3p"] <- "hsa-miR-133a-3p"
+seeds[seeds == "hsa-miR-184-3p"] <- "hsa-miR-184"
+names(mirs_alt) <- seeds
+
+
+# get optimal for all mirs
+cut_off_list <- list()
+cut_vec <- seq(-2,0, length.out = 40)
+for(mirna in mirs_alt) {
+  cor <- get_cor_vec_us(cut_vec, mir = mirna)
+  cor_df <- data.frame(cut_off = cut_vec, r2=cor)
+  cor_df <- cor_df[which(cor_df$r2 > 0.975*max(cor_df$r2)),]
+  cut_off <- min(cor_df$cut_off)
+  cut_off_list[[mirna]]["cutoff"] <- cut_off
+}
+
+saveRDS(cut_off_list,"cut_off_list_orf_97.rds")
+
+
+
+# get optimal for all mirs
+cut_off_list <- list()
+cut_vec <- seq(-2,0, length.out = 40)
+for(mirna in mirs_alt) {
+  cor <- get_cor_vec_us(cut_vec, mir = mirna)
+  cor_df <- data.frame(cut_off = cut_vec, r2=cor)
+  cor_df <- cor_df[which(cor_df$r2 > 0.99*max(cor_df$r2)),]
+  cut_off <- min(cor_df$cut_off)
+  cut_off_list[[mirna]]["cutoff"] <- cut_off
+}
+
+saveRDS(cut_off_list,"cut_off_list_orf_99.rds")
+```
+
+
+
+
+
+# Correlation function for background coefficient
+```{r}
+get_cor_us_back <- function(coef_back, mir, return.raw = FALSE){
+  
+  # Get all files and connections
+  m <- readRDS(file = "/mnt/schratt/miRNA_KD/ms_test/hsa.12mirs.HEK.fullScan.GR.rds")
+  hek_tpm <- read.csv("/mnt/schratt/miRNA_KD/EnrichMir_Work/Aggregate_fg/bartel_data/GSE140218_HEK293FT_transfection_logtpm_batchnormalized.txt", sep="\t", stringsAsFactors = F, row.names = 1)
+  seeds <- gsub("\\.txt", "", list.files("/mnt/schratt/miRNA_KD/EnrichMir_Work/Aggregate_fg/predictions_anB/", full.names = F))
+  
+  # relate different miRNA IDs
+  mirs_alt <- gsub("hsa-", "", seeds)
+  mirs_alt <- gsub("-[35]p.*", "", mirs_alt)
+  mirs_alt <- gsub("R-", "r", mirs_alt)
+  
+  seeds[seeds == "hsa-miR-184-3p"] <- "hsa-miR-184"
+  names(mirs_alt) <- seeds
+    
+  
+  # Get mean-centered hek-values and the aggregation
+  # 1) get the seed info
+  mir_seeds <- names(mirs_alt)[mirs_alt==mir]
+  # 2) get the tpm values per mir
+  subs_mir <- names(hek_tpm)[names(hek_tpm) != mir]
+  hek_mir <- data.frame(
+    logTPM = hek_tpm[[mir]]-rowMeans(hek_tpm[subs_mir]),
+    transcript_id = row.names(hek_tpm),
+    stringsAsFactors = F,
+    row.names = rownames(hek_tpm)
+    ) 
+  
+  # 3) aggregate
+  m_agg <- aggregateMatches_Biochem(e = m, coef_back = coef_back)
+  m_agg_slim <- m_agg[,c(1,2,5)]
+  m_repr <- pivot_wider(m_agg,id_cols = transcript, names_from = miRNA, values_from = repression, values_fill = list(repression = 0))
+  m_repr <- column_to_rownames(m_repr, var = "transcript")
+
+  # 4) get the correlation
+  subs_mir2 <- names(mirs_alt)[mirs_alt!=mir]
+  m_repr_mir <- m_repr[mir_seeds] - rowMeans(m_repr[subs_mir2], na.rm = TRUE)
+  repr_mir <- merge(hek_mir,m_repr_mir,by = 0, all.x = TRUE )
+  repr_mir[[mir_seeds]][is.na(repr_mir[[mir_seeds]])] <- 0
+  if(return.raw) {
+    return(repr_mir)
+  }else{
+    cor = cor.test(repr_mir[[mir_seeds]], repr_mir$logTPM, method="pearson")
+    return(cor$estimate^2)
+  }
+}
+
+get_cor_vec_us_back <- function(coef_back_vec, mir) {
+  cor_vec <- sapply(coef_back_vec, get_cor_us_back, mir)
+  return(cor_vec)
+} 
+
+```
+
+
+
+
+# Get the cut_off correlation for mir138 (us) with optimized background coefficient
+```{r}
+cut_vec <- seq(-2,0, length.out = 40)
+
+cor <- get_cor_vec_us(cut_vec, mir = "mir138")
+cor_df <- data.frame(cut_off = cut_vec, r2=cor)
+cor_df1 <- cor_df
+cor_df1$type <- "orf_cut_off '+ c'"
+
+
+coef_back_vec <- seq(-3,0, length.out = 40)
+cor <- get_cor_vec_us_back(coef_back_vec, mir = "mir138")
+cor_df <- data.frame(coef_back = coef_back_vec, r2=cor)
+cor_df2 <- cor_df
+cor_df2$type <- "cut_off = 0.3 // coef_back"
+
+cor_df <- rbind(cor_df1,cor_df2)
+
+
+p1 <- ggplot(cor_df, aes(x = coef, y = r2, color = type)) + 
+  geom_line(size = 1) +
+  theme_bw() +
+  ylab('r^2') +
+  ggtitle("mir138")
+
+#ggsave("cut_off_correlation_mir138_ORF.png")
+gc()
+```
+
+
+
+
+
+# Comparing indices, this was for a global cut_off
+```{r}
+m138_0 <- get_cor_us(0,mir = "mir138",return.raw = TRUE)
+m138_1 <- get_cor_us(-1,mir = "mir138",return.raw = TRUE)
+
+m138_0 <- m138_0[order(m138_0$`hsa-miR-138-5p`),]
+m138_0$index_0 <- seq_along(m138_0$Row.names)
+
+m138_1 <- m138_1[order(m138_1$`hsa-miR-138-5p`),]
+m138_1$index_1 <- seq_along(m138_1$Row.names)
+
+m138 <- merge(m138_0,m138_1,by= "Row.names")
+
+m138_03 <- get_cor_us(-0.3,mir = "mir138",return.raw = TRUE)
+m138_03 <- m138_03[order(m138_03$`hsa-miR-138-5p`),]
+m138_03$index_03 <- seq_along(m138_03$Row.names)
+
+m138 <- merge(m138,m138_03, by="Row.names")
+
+plot(m138$index_0,m138$index_03)
+plot(m138$index_0,m138$index_1)
+```
+
+
+
+
+
+
+
+
+# Comparing indices, this is with the orf_cut_off
+```{r}
+m138_0 <- get_cor_us(0,mir = "mir138",return.raw = TRUE)
+m138_1 <- get_cor_us(-1,mir = "mir138",return.raw = TRUE)
+
+m138_0 <- m138_0[order(m138_0$`hsa-miR-138-5p`),]
+m138_0$index_0 <- seq_along(m138_0$Row.names)
+
+m138_1 <- m138_1[order(m138_1$`hsa-miR-138-5p`),]
+m138_1$index_1 <- seq_along(m138_1$Row.names)
+
+m138 <- merge(m138_0,m138_1,by= "Row.names")
+
+m138_03 <- get_cor_us(-0.3,mir = "mir138",return.raw = TRUE)
+m138_03 <- m138_03[order(m138_03$`hsa-miR-138-5p`),]
+m138_03$index_03 <- seq_along(m138_03$Row.names)
+
+m138 <- merge(m138,m138_03, by="Row.names")
+
+plot(m138$index_0,m138$index_03)
+plot(m138$index_0,m138$index_1)
+```
+
+
+
+# Comparing indices, this is with the orf_cut_off + c/2
+```{r}
+m138_0 <- get_cor_us(0,mir = "mir138",return.raw = TRUE)
+m138_1 <- get_cor_us(-1,mir = "mir138",return.raw = TRUE)
+
+m138_0 <- m138_0[order(m138_0$`hsa-miR-138-5p`),]
+m138_0$index_0 <- seq_along(m138_0$Row.names)
+
+m138_1 <- m138_1[order(m138_1$`hsa-miR-138-5p`),]
+m138_1$index_1 <- seq_along(m138_1$Row.names)
+
+m138 <- merge(m138_0,m138_1,by= "Row.names")
+
+m138_03 <- get_cor_us(-0.3,mir = "mir138",return.raw = TRUE)
+m138_03 <- m138_03[order(m138_03$`hsa-miR-138-5p`),]
+m138_03$index_03 <- seq_along(m138_03$Row.names)
+
+m138 <- merge(m138,m138_03, by="Row.names")
+
+plot(m138$index_0,m138$index_03)
+plot(m138$index_0,m138$index_1)
+```
+
+
+
+# To do a pie chart
+```{r}
+e <- readRDS(file = "/mnt/schratt/miRNA_KD/ms_test/hsa.12mirs.HEK.fullScan.GR.rds")
+m <- as.data.frame(mcols(e))
+m$transcript <- as.factor(seqnames(e))
+m <- as.data.table(m)
+
+cut_off <- nrow(m[m$log_kd > -300,])/nrow(m)
+rest <- 1 - nrow(m[m$log_kd > -300,])/nrow(m)
+
+df <- data.frame("cut-off 0.3" = cut_off , "rest" = rest)
+df <- data.frame(t(df))
+df$group <- row.names(df)
+
+ggplot(df, aes(x="", y=t.df., fill=group))+
+  geom_bar(width = 1, stat = "identity") + 
+  coord_polar("y", start=0) + 
+  scale_fill_brewer(palette="Dark2")+
+  theme_minimal()
+
+```
+
+
+

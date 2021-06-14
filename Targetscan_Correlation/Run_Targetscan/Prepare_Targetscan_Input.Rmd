@@ -1,0 +1,269 @@
+---
+title: "Prepare_Targetscan_Input"
+author: "Michael Soutschek"
+date: "23 2 2021"
+output: html_document
+---
+
+```{r}
+suppressPackageStartupMessages({
+  library(Biostrings)
+  library(BiocParallel)
+  library(GenomicRanges)
+  library(ensembldb)
+  library(BSgenome.Hsapiens.UCSC.hg19)
+  library(data.table)
+  library(tidyverse)
+  library(CHNOSZ)
+})
+```
+
+
+# load data
+```{r}
+g <- rtracklayer::import.gff("/mnt/schratt/enrichMir_datasets/bartel_assembly/HEK/GSE140217_HEK_transcriptannotations.gtf.gz")
+```
+
+# export 3UTR as bed file
+```{r}
+g2 <- g
+mcols(g2)$score <- NULL
+mcols(g2)$name <- mcols(g2)$transcript_id
+g2 <- g2[g2$type == "3UTR"]
+export.bed(g2,"./Input/Prep/GSE140217_HEK_transcriptannotations_UTR.bed",format = "bed")
+```
+
+
+# export CDS as bed file
+```{r}
+g3 <- g
+mcols(g3)$score <- NULL
+mcols(g3)$name <- mcols(g3)$transcript_id
+g3 <- g3[g3$type == "CDS"]
+export.bed(g3,"./Input/Prep/GSE140217_HEK_transcriptannotations_CDS.bed",format = "bed")
+```
+
+
+
+# Get UTR Maf File
+```{bash, engine.opts='-l'}
+cd /mnt/schratt/scanMiR_paper_scripts/Targetscan_Corr/Run_original_Targetscan/
+
+mafFetch hg19 multiz100way ./Input/Prep/GSE140217_HEK_transcriptannotations_UTR.bed ./Input/Prep/GSE140217_HEK_UTR_MAF.txt
+```
+
+# Get CDS Maf File
+```{bash, engine.opts='-l'}
+cd /mnt/schratt/scanMiR_paper_scripts/Targetscan_Corr/Run_original_Targetscan/
+
+mafFetch hg19 multiz100way ./Input/Prep/GSE140217_HEK_transcriptannotations_CDS.bed ./Input/Prep/GSE140217_HEK_CDS_MAF.txt
+```
+
+
+>> Stitch MAF Blocks with Galaxy
+usegalaxy.org "Stitch Maf Blocks"
+
+# Read in the fasta file and further process
+```{r}
+Maf_Stitch <- readDNAStringSet("./Input/Prep/GSE140217_HEK_UTR_MAF_Stitch.fasta")
+Maf_Stitch_df <- data.frame(info = names(Maf_Stitch),sequence = Maf_Stitch)
+
+Maf_Stitch_df <- separate(Maf_Stitch_df,"info",c("species","info"),sep = "\\.")
+Maf_Stitch_df <- separate(Maf_Stitch_df,"info",c("info","region"),sep = "\\:")
+Maf_Stitch_df <- separate(Maf_Stitch_df,"region",c("start","end"),sep = "\\-")
+Maf_Stitch_df <- separate(Maf_Stitch_df,"info",c("seqnames","strand"),sep = "\\(")
+Maf_Stitch_df$strand <- NULL
+Maf_Stitch_df$start <- as.numeric(Maf_Stitch_df$start) + 1L
+
+#fill values to keep the order after merging and get human gene.names for all
+Maf_Stitch_df <-  fill(Maf_Stitch_df, c("start","end","seqnames"), .direction = c("down"))
+```
+
+# Get the gene names
+```{r}
+g2_df <- as.data.frame(g2)
+keep <- c("seqnames","start","end","strand","type","gene_id","transcript_id","gene_name")
+g2_df_fil <- g2_df[,keep]
+
+Maf_Stitch_df <- merge(Maf_Stitch_df,g2_df_fil,by = c("start","end","seqnames"),all.x = TRUE)
+saveRDS(Maf_Stitch_df,"./Input/Prep/GSE140217_HEK_UTR_MAF_Stitch_DF.rds")
+```
+
+# We need to convert all sequences with a "-" strand to the Reverse Complement
+```{r}
+Maf_Stitch_df <- readRDS("./Input/Prep/GSE140217_HEK_UTR_MAF_Stitch_DF.rds")
+
+Maf_Stitch_df_Plus <- Maf_Stitch_df[Maf_Stitch_df$strand == "+",]
+Maf_Stitch_df_Minus <- Maf_Stitch_df[Maf_Stitch_df$strand == "-",]
+
+# get the revcomp
+minus_seqs <- DNAStringSet(Maf_Stitch_df_Minus$sequence)
+minus_seqs_rev <- reverseComplement(minus_seqs)
+
+# add to data.frame
+Maf_Stitch_df_Minus$sequence <- NULL
+Maf_Stitch_df_Minus$sequence <- as.character(minus_seqs_rev)
+
+Maf_Stitch_df <- rbind(Maf_Stitch_df_Plus,Maf_Stitch_df_Minus)
+saveRDS(Maf_Stitch_df,"./Input/Prep/GSE140217_HEK_UTR_MAF_Stitch_DF_corrected.rds")
+```
+
+# Then we need to stitch sequences of common genes together
+```{r}
+Maf_Stitch_df <- readRDS("./Input/Prep/GSE140217_HEK_UTR_MAF_Stitch_DF_corrected.rds")
+
+# get duplicate info
+a <- mcols(g2)$transcript_id
+a <- a[duplicated(a)]
+
+# Get the unique data.frame
+Maf_Stitch_df_un <- Maf_Stitch_df[!Maf_Stitch_df$transcript_id %in% a,]
+Maf_Stitch_df_un <- Maf_Stitch_df_un[,-c(1,2)]
+
+# Get the duplicate data.frame
+Maf_Stitch_df_dupl <- Maf_Stitch_df[Maf_Stitch_df$transcript_id %in% a,]
+
+dupl_trans_list <- split(Maf_Stitch_df_dupl,Maf_Stitch_df_dupl$transcript_id)
+
+dupl_trans_list_cl <- lapply(dupl_trans_list, FUN = function(x) {
+  df <- x
+  df <- df[with(df,order(species,start)),]
+  seq <- DNAStringSet(df$sequence)
+  names(seq) <- paste0(df$species,";",df$transcript_id)
+  seq <- DNAStringSet(lapply(split(seq, names(seq)), 
+                              FUN=function(x) do.call(xscat, x)))
+  df <- data.frame(info = names(seq),sequence = seq)
+  df <- separate(df,"info",c("species","transcript_id"),sep = "\\;")
+  df
+})
+
+dupl_trans_df <- dplyr::bind_rows(dupl_trans_list_cl)
+
+# remove start + end and get unique
+Maf_Stitch_df_dupl <- Maf_Stitch_df_dupl[,-c(1,2,5)]
+Maf_Stitch_df_dupl <- distinct(Maf_Stitch_df_dupl)
+
+# Merge dupl sequences and rbind with unique
+Maf_Stitch_df_dupl <- merge(Maf_Stitch_df_dupl,dupl_trans_df, by = c("species","transcript_id"))
+Maf_Stitch_df <- rbind(Maf_Stitch_df_dupl,Maf_Stitch_df_un)
+saveRDS(Maf_Stitch_df,"./Input/Prep/GSE140217_HEK_UTR_MAF_Stitch_DF_corrected_un.rds")
+```
+
+
+
+# Get the Species ID
+```{r}
+# The genomes - without fish
+genomes <- read.delim("./Input/Prep/Species_ID/UCSC_species_wo_fish_cl.txt", header=FALSE)
+genomes <- separate(genomes,"V4",c("anno1","anno2"),sep = "\\/")
+
+# To get the IDs
+write.table(genomes$V2,"./Input/Prep/Species_ID/scientific_names.txt",row.names = FALSE,col.names = FALSE)
+# Paste list here: https://www.ncbi.nlm.nih.gov/Taxonomy/TaxIdentifier/tax_identifier.cgi
+species_id <- read.delim("./Input/Prep/Species_ID/tax_report.txt", comment.char="#")
+species_id <- species_id[,c("name","taxid")]
+
+# merge
+species <- merge(species_id,genomes,by.x = c("name"),by.y = c("V2"),all.y = TRUE)
+species <- species[,c("name","taxid","anno2")]
+
+# merge with UTR set and filter
+Maf_Stitch_df <- readRDS("./Input/Prep/GSE140217_HEK_UTR_MAF_Stitch_DF_corrected_un.rds")
+Maf_Stitch_df <- Maf_Stitch_df[Maf_Stitch_df$species %in% species$anno2,]
+Maf_Stitch_df <- merge(Maf_Stitch_df,species,by.x = "species",by.y = "anno2",all.x = TRUE)
+
+# sort and write as table
+Maf_Stitch_df <- Maf_Stitch_df[order(Maf_Stitch_df$transcript_id),]
+UTR_table <- Maf_Stitch_df[,c("transcript_id","taxid","sequence")]
+write.table(UTR_table,"./Input/HEK_UTR_Seqs_df.csv",sep = "\t",row.names = FALSE,col.names = FALSE)
+```
+
+
+
+
+# Prepare ORF Sequences in the right format
+```{r}
+g3 <- as.list(split(g3,strand(g3)))
+g3[["+"]] <- g3[["+"]][order(start(g3[["+"]]))]
+g3[["-"]] <- g3[["-"]][order(end(g3[["-"]]),decreasing=TRUE)]
+g3 <- c(g3[["+"]],g3[["-"]])
+seqs <- extractTranscriptSeqs(BSgenome.Hsapiens.UCSC.hg19, split(g3,g3$transcript_id))
+ORF_df <- data.frame(names = names(seqs),species = 9606, seq = seqs)
+write.table(ORF_df,"./Input/HEK_ORF_Seqs_df.csv",sep = "\t",row.names = FALSE,col.names = FALSE)
+```
+
+
+
+
+# Prepare 3'UTR sequences
+```{r}
+#hUTR <- fread("/mnt/schratt/Targetscan/Raw_Files/UTR_Sequences.txt")
+```
+
+
+
+
+
+
+# Prepare CDS sequences
+```{r}
+#hCDS <- fread("/mnt/schratt/Targetscan/Raw_Files/hORF_Sequences.txt")
+```
+
+
+
+# Prepare human Seeds
+```{r}
+MiRs <- fread("/mnt/schratt/Targetscan/Raw_Files/miR_Family_Info.txt")
+MiRs_con <- MiRs[MiRs$`Family Conservation?` > 0,]
+MiRs_con <- MiRs_con[,1:3]
+MiRs_con <- dplyr::distinct(MiRs_con)
+
+# Prepare the species list
+MiRs_spec <- CharacterList(lapply(split(MiRs_con$`Species ID`, MiRs_con$`Seed+m8`),unique))
+seeds_in <- sapply(MiRs_spec,FUN=function(x){ paste(x, collapse = ";") })
+seeds_in <- data.frame(Species = seeds_in,row.names=names(seeds_in))
+seeds_in$`Seed+m8` <- row.names(seeds_in)
+
+hMiRs_fam <- MiRs[`Species ID` == 9606,c('miR family','Seed+m8')]
+hMiRs_fam <- dplyr::distinct(hMiRs_fam)
+
+seeds_in  <- merge(hMiRs_fam,seeds_in, by = 'Seed+m8', all.y = TRUE)
+seeds_in <- seeds_in[,c('miR family','Seed+m8','Species')]
+seeds_in <- seeds_in[grep("9606",seeds_in$Species),]
+
+write.table(seeds_in,"./Input/MiRs_con_seeds.csv",sep = "\t",quote = FALSE,row.names = FALSE,col.names = FALSE)
+```
+
+
+
+# Prepare human miRNA file
+```{r}
+MiRs <- fread("/mnt/schratt/Targetscan/Raw_Files/miR_Family_Info.txt")
+MiRs_con <- MiRs[MiRs$`Family Conservation?` > 0,]
+MiRs_con <- MiRs_con[,1:5]
+hMiRs_con <- MiRs_con[MiRs_con$`Species ID` == 9606,]
+
+# Prepare the lists
+MiRs_ID <- CharacterList(lapply(split(hMiRs_con$`MiRBase ID`, hMiRs_con$`Seed+m8`),unique))
+MiRs_ID <- sapply(MiRs_ID,FUN=function(x){ paste(x, collapse = ",") })
+MiRs_ID <- data.frame('MiRBase ID' = MiRs_ID,row.names=names(MiRs_ID))
+MiRs_ID$`Seed+m8` <- row.names(MiRs_ID)
+
+MiRs_Seq <- CharacterList(lapply(split(hMiRs_con$`Mature sequence`, hMiRs_con$`Seed+m8`),unique))
+MiRs_Seq <- sapply(MiRs_Seq,FUN=function(x){ paste(x, collapse = ",") })
+MiRs_Seq <- data.frame('Mature sequence' = MiRs_Seq,row.names=names(MiRs_Seq))
+MiRs_Seq$`Seed+m8` <- row.names(MiRs_Seq)
+
+MiRs_info <- merge(MiRs_ID,MiRs_Seq,by = 'Seed+m8')
+
+# merge
+hMiRs_in <- hMiRs_con[,1:3]
+hMiRs_in <- dplyr::distinct(hMiRs_in)
+hMiRs_in <- merge(hMiRs_in,MiRs_info,by = 'Seed+m8')
+hMiRs_in <- hMiRs_in[,-1]
+
+write.table(hMiRs_in,"./Input/MiRs_file.csv",sep = "\t",quote = FALSE,row.names = FALSE,col.names = FALSE,)
+```
+
+

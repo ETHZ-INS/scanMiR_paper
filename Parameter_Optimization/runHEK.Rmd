@@ -1,0 +1,44 @@
+---
+title: "run_HEK"
+author: "Pierre-Luc Germain"
+date: "11/10/2020"
+output: html_document
+---
+
+
+
+```{r}
+suppressPackageStartupMessages({
+  library(Biostrings)
+  library(BiocParallel)
+  library(GenomicRanges)
+  library(ensembldb)
+  library(BSgenome.Hsapiens.UCSC.hg19)
+  library(scanMiRData)
+  library(scanMiR)
+})
+
+mods <- scanMiRData::getKdModels("hsa",NULL)
+mods2 <- mods[c("hsa-miR-122-5p", "hsa-miR-133-3p", 
+"hsa-miR-138-5p", "hsa-miR-145-5p", "hsa-miR-184", "hsa-miR-190a-5p", 
+"hsa-miR-200b-3p", "hsa-miR-216a-5p", "hsa-miR-217-5p", "hsa-miR-219a-5p", 
+"hsa-miR-375-3p", "hsa-miR-451a")]
+
+g <- rtracklayer::import.gff("data/McGeary_2019_raw/GSE140217_HEK_transcriptannotations.gtf.gz")
+g <- g[g$type!="5UTR"]
+g <- as.list(split(g,strand(g)))
+g[["+"]] <- g[["+"]][order(start(g[["+"]]))]
+g[["-"]] <- g[["-"]][order(end(g[["-"]]),decreasing=TRUE)]
+g <- c(g[["+"]],g[["-"]])
+seqs <- extractTranscriptSeqs(BSgenome.Hsapiens.UCSC.hg19, split(g,g$transcript_id))
+g.cds <- g[g$type=="CDS"]
+orf.len <- sum(width(split(g.cds, g.cds$transcript_id)))
+mcols(seqs)$ORF.length <- orf.len[names(seqs)] + 15
+m <- findSeedMatches(seqs, mods2, maxLogKd=NULL, BP = MulticoreParam(12, progressbar=TRUE), p3.extra =TRUE, ret="GRanges")
+saveRDS(m, file="./data/hsa.12mirs.HEK.fullScan.GR.rds")
+
+# save the indexed fst
+# d <- as.data.frame(m)
+# d$width <- d$strand <- NULL
+# saveIndexedFst(d, "miRNA", "hsa.HEK.fullScan", nthreads=3)
+```

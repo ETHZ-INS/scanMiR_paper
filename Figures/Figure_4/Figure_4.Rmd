@@ -1,0 +1,199 @@
+---
+title: "Figure_3"
+author: "Michael Soutschek"
+date: "4 3 2021"
+output: html_document
+---
+
+
+```{r}
+suppressPackageStartupMessages({
+  library(gridExtra)
+  library(grid)
+  library(ggplot2)
+  library(ggrepel)
+  library(cowplot)
+  library(scanMiR)
+  library(scanMiRApp)
+})
+```
+
+
+#colors
+```{r}
+source("../misc.R")
+```
+
+
+#mods
+```{r}
+mods <- scanMiRData::getKdModels("hsa",NULL)
+mods <- KdModelList(mods)
+```
+
+# Plot Hoxb8
+```{r}
+Hoxb8 <- readRDS("Hoxb8_196.rds")
+Hoxb8_df <- as.data.frame(Hoxb8)
+Hoxb8_df$logKd <- Hoxb8_df$log_kd / 1000
+Hoxb8_df$info <- ifelse(Hoxb8_df$note == "Slicing?","Slicing?","")
+Hoxb8_df$type <- factor(Hoxb8_df$type, grep("bulged",levels(Hoxb8_df$type),invert=TRUE,value=TRUE))
+levels(Hoxb8_df$type) <- gsub("6mer-m8|6mer-a1","6mer",levels(Hoxb8_df$type))
+levels(Hoxb8_df$type) <- gsub("wobbled 8mer|wobbled 7mer","non-canonical",levels(Hoxb8_df$type))
+
+p3 <- ggplot(Hoxb8_df, aes(x = start, y = -`logKd`)) + 
+        geom_hline(yintercept=1, linetype="dashed", color = darkblue, size=1) + 
+        geom_point(size=2,  aes(color = type,shape = miRNA), shape = 15) + 
+        geom_point(data=Hoxb8_df[Hoxb8_df$info!="",], shape=1, size=5) +
+        scale_color_manual(values = type_cols, drop=FALSE) + 
+        geom_text_repel(label = Hoxb8_df$info, nudge_y = 0.5, nudge_x=0, min.segment.length = 0) +
+        ggtitle("Hoxb8 - miR-196a-5p") + xlab("3'UTR Sequence") + theme_light() +
+        xlim(1,856) + ylim(1,6.5) +
+        theme(
+          panel.border =element_rect(color="black", fill=NA),
+          text = element_text(size=12),
+          legend.title = element_text(size = rel(0.9)),
+          legend.text = element_text(size = rel(0.8))
+        ) 
+p3
+```
+
+# Plot TargetAlignment Hoxb8
+```{r}
+mods_196 <- mods[["hsa-miR-196a-5p"]]
+
+p4 <- as_grob(~viewTargetAlignment(Hoxb8[1],mods_196,flagBulgeMatches = TRUE,maxBulgeSize=0,outputType = "plot", cex=0.75))
+```
+
+
+# Plot CDR1As
+```{r}
+CDR1 <- readRDS("../../circRNAs/Human/CDR1as_7_671_matches.rds")
+CDR1_df <- as.data.frame(CDR1)
+CDR1_df$logKd <- CDR1_df$log_kd / 1000
+CDR1_df$info <- ifelse(CDR1_df$note == "Slicing?","Slicing?","")
+CDR1_df$miRNA <- relevel(CDR1_df$miRNA, "hsa-miR-7-5p")
+CDR1_df$type <- factor(CDR1_df$type, grep("bulged",levels(CDR1_df$type),invert=TRUE,value=TRUE))
+levels(CDR1_df$type) <- gsub("6mer-m8|6mer-a1","6mer",levels(CDR1_df$type))
+levels(CDR1_df$type) <- gsub("wobbled 8mer|wobbled 7mer","non-canonical",levels(CDR1_df$type))
+
+legend_df <- data.frame(matrix(ncol = 16, nrow = 0))
+colnames(legend_df) <- colnames(CDR1_df)
+legend_df[1,"miRNA"] <- "hsa-miR-196a-5p"
+legend_df[1,"type"] <- "non-canonical"
+CDR1_df <- rbind(CDR1_df,legend_df)
+CDR1_df$miRNA <- factor(as.character(CDR1_df$miRNA), levels = c("hsa-miR-196a-5p","hsa-miR-671-5p","hsa-miR-7-5p"))
+
+
+
+p5 <- ggplot(CDR1_df, aes(x = start, y = -`logKd`)) + 
+        geom_hline(yintercept=1, linetype="dashed", color = darkblue, size=1) + 
+        geom_point(size=2,  aes(color = type, shape = miRNA)) +
+        scale_shape_manual(values=c(15, 17, 16))+
+        geom_point(data=CDR1_df[CDR1_df$info!="",], shape=1, size=5) +
+        scale_color_manual(values = type_cols, drop=FALSE) + 
+        geom_text_repel(label = CDR1_df$info, nudge_y = -0.35, nudge_x=0, min.segment.length = 0) +
+        ggtitle("circular CDR1as") + xlab("Sequence") + theme_light() + ylim(1,6.5) +
+        theme(
+          panel.border =element_rect(color="black", fill=NA),
+          text = element_text(size=12),
+          legend.title = element_text(size = rel(0.9)),
+          legend.text = element_text(size = rel(0.8))
+        ) 
+p5
+
+```
+
+# Plot TargetAlignment CDR1as
+```{r}
+mods_671 <- mods[["hsa-miR-671-5p"]]
+
+p6 <- as_grob(~viewTargetAlignment(CDR1[76],mods_671,flagBulgeMatches = TRUE,maxBulgeSize=0,outputType = "plot", cex=0.75))
+```
+
+
+# Plot Cyrano example
+```{r}
+Cyr <- readRDS("Cyrano_miR7.rds")
+Cyr_df <- as.data.frame(Cyr)
+Cyr_df$logKd <- Cyr_df$log_kd / 1000
+#Cyr_df$type <- ifelse(Cyr_df$type == "non-canonical","",as.character(Cyr_df$type))
+#Cyr_df$type <- ifelse(grepl("6mer",Cyr_df$type),"",as.character(Cyr_df$type))
+Cyr_df$TDMD2 <- ifelse(Cyr_df$note == "TDMD","TDMD","")
+Cyr_df <- Cyr_df[Cyr_df$logKd < -1,]
+levels(Cyr_df$type) <- gsub("6mer-m8|6mer-a1","6mer",levels(Cyr_df$type))
+
+p7 <- ggplot(Cyr_df, aes(x = start, y = -`logKd`)) + 
+        geom_hline(yintercept=1, linetype="dashed", color = darkblue, size=1) + 
+        geom_point(size=2, aes(colour=type)) + geom_point(data=Cyr_df[Cyr_df$TDMD2!="",], shape=1, size=4) +
+        geom_text_repel(label = Cyr_df$TDMD2, nudge_y = -0.5, min.segment.length = 0) +
+        scale_color_manual(values = type_cols) + 
+        #geom_text(label = Cyr_df$type,nudge_y = -0.4) +
+        ggtitle("Cyrano - miR-7-5p") + xlab("Sequence") + ylab("-logKd (>1)") +theme_light() + ylim(1,6.5) +
+        theme(
+                panel.border =element_rect(color="black", fill=NA),
+                text = element_text(size=12),
+                legend.title = element_text(size = rel(0.9)),
+                legend.text = element_text(size = rel(0.8))
+              ) 
+p7
+```
+
+
+```{r}
+mods_7 <- mods[["hsa-miR-7-5p"]]
+p8 <- as_grob(~viewTargetAlignment(Cyr[1],mods_7,flagBulgeMatches = TRUE, outputType = "plot", cex=0.75))
+```
+
+
+# Grid
+```{r, eval=TRUE}
+legend <- get_legend(
+  # create some space to the left of the legend
+  p5 + theme(legend.box.margin = margin(0, 12, 0, 0))
+)
+
+pp1 <- plot_grid(p3 + theme(legend.position = "none"),p4,
+                 nrow=2, rel_heights = c(6,2), labels = c("A","B")) + theme(plot.margin = unit(c(0,3,0,0), "lines"))
+
+pp2 <- plot_grid(p5 + theme(legend.position = "none"),p6,
+                 nrow=2, rel_heights = c(6,2), labels = c("C","D"))
+
+pp3 <- plot_grid(p7 + theme(legend.position = "none"),
+                 p8,nrow=2, rel_heights = c(6,2), labels = c("E","F")) + theme(plot.margin = unit(c(0,3,0,0), "lines"))
+
+pp4 <- plot_grid(legend,ggplot() + theme_void(), rel_widths = c(1,3),labels = c("")) + 
+  theme(plot.margin = unit(c(0,0,3,0), "lines"))
+
+
+pp <- plot_grid(pp1,pp2,pp3,pp4,
+                ncol = 2, labels = c(""), scale = 0.95)
+
+ggsave("Figure_4.pdf",plot = pp, width = 10, height = 8)
+ggsave("Figure_4.png",plot = pp, width = 10, height = 8)
+
+
+# gl1 <- list(p5,p6)
+# gr1 <- grid.arrange(
+#   grobs = gl1,
+#   widths = c(0.5, 3, 0.5),
+#   layout_matrix = rbind(c(NA, 1,NA),
+#                         c(2, 2, 2)),
+# )
+```
+
+
+
+
+```{r, fig.width=9, fig.height=4.5}
+# pp <- plot_grid(
+#   plot_grid(p5, p7, rel_widths = c(7,4), labels=c("A","C")),
+#   plot_grid(p6, p8, labels=c("B","D"), scale=0.9),
+#   nrow=2, rel_heights = c(6,2)
+# )
+# ggsave("Fig4.pdf",plot = pp, width = 9, height = 4.5)
+# ggsave("Fig4.png",plot = pp, width = 9, height = 4.5)
+# pp
+```
+
+

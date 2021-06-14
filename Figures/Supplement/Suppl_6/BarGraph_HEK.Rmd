@@ -1,0 +1,141 @@
+---
+title: "BarGraph_orig"
+author: "Michael Soutschek"
+date: "9 3 2021"
+output: html_document
+---
+
+
+
+```{r}
+suppressPackageStartupMessages({
+  library(Biostrings)
+  library(BiocParallel)
+  library(GenomicRanges)
+  library(ensembldb)
+  library(BSgenome.Hsapiens.UCSC.hg19)
+  library(ggsci)
+})
+devtools::load_all("~/scanMir/")
+```
+
+
+
+
+```{r fns}
+domnorm <- function(x, useMedian=FALSE){
+  y <- setNames(seq_len(ncol(x)), colnames(x))
+  if(useMedian){
+    x <- as.data.frame(lapply(y, FUN=function(i){
+      x[,i]-matrixStats::rowMedians(as.matrix(x[,-i]))
+    }), row.names=row.names(x))
+  }else{
+    x <- as.data.frame(lapply(y, FUN=function(i) x[,i]-rowMeans(x[,-i])), row.names=row.names(x))
+  }  
+  x
+}
+
+# aggregate all miRNAs using the given parameters
+aggAll <- function(m,ll, params=c(), ags=NULL){
+  bp <- c(b=0.5735, c=-1.7091, p3=0, bg = 0, coef_utr = 0, coef_orf = 0)
+  bp <- c(bp,ags)
+  bp[names(params)] <- as.numeric(params)
+  res <- bplapply(setNames(names(m),names(m)), BPPARAM=MulticoreParam(length(m)), FUN=function(x){
+    if(!("ag" %in% names(bp)) && !is.null(bp[[x]])) bp[["ag"]] <- bp[[x]]
+    x <- .aggregate_miRNA(m[[x]],ll = ll, ag=bp[["ag"]], b=bp[["b"]], c=bp[["c"]], p3=bp[["p3"]], coef_utr=bp[["coef_utr"]],coef_orf = bp[["coef_orf"]], toInt = FALSE)
+    y <- x$repression
+    names(y) <- x$transcript
+    y
+  })
+  txs <- unique(unlist(lapply(res, FUN=names)))
+  x <- sapply(res, FUN=function(x) x[txs])
+  row.names(x) <- txs
+  x[is.na(x)] <- 0
+  domnorm(x)
+}
+
+getComparisonTable <- function(params=c(), ob, ags=NULL){
+  bp <- c(b=0.5735, c=-1.7091, p3=0, bg = 0, coef_utr = 0, coef_orf = 0)
+  bp[names(params)] <- as.numeric(params)
+  d <- aggAll(m,ll, bp, ags = ags)
+  colnames(ob) <- gsub("-",".",colnames(ob))
+  d <- as.matrix(d[row.names(ob),colnames(ob)])
+  d[is.na(d)] <- 0
+  d <- reshape2::melt(d, varnames=c("transcript","miRNA"), value.name="predicted")
+  d$observed <- reshape2::melt(as.matrix(ob))[,"value"]
+  d
+}
+```
+
+
+## Data
+```{r}
+m <- readRDS(file = "../../../Parameter_Optimization/data/hsa.12mirs.HEK.fullScan.GR.rds")
+ll <- as.data.frame(metadata(m)$length.info)
+ll$transcript <- row.names(ll)
+m$transcript <- as.factor(seqnames(m))
+m <- split(mcols(m), m$miRNA)
+
+ob <- domnorm(read.delim("../../../Parameter_Optimization/data/McGeary_2019_raw/GSE140218_HEK293FT_transfection_logtpm_batchnormalized.txt", row.names=1))
+colnames(ob) <- names(m) # unsafe - they just happen to match
+```
+
+
+
+# Compare the values
+
+```{r}
+op1 <- readRDS("../../../Parameter_Optimization/ag_HEK/opt_ags_us_fitted.rds")
+op2 <- readRDS("../../../Parameter_Optimization/ag_HEK/opt_ags_us_fitted_p3.rds")
+op3 <- readRDS("../../../Parameter_Optimization/ag_HEK/opt_ags_fitted_utr_orf.rds")
+op4 <- readRDS("../../../Parameter_Optimization/ag_HEK/opt_ags_fitted_utr_orf_p3.rds")
+
+# Opt Ags
+d1 <- getComparisonTable(op1$par,ob)
+cors1 <- sapply(split(d1, d1$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+
+# Opt Ags + p3
+d2 <- getComparisonTable(op2$par,ob)
+cors2 <- sapply(split(d2, d2$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+
+# Opt Ags + utr / orf
+d3 <- getComparisonTable(op3$par,ob)
+cors3 <- sapply(split(d3, d3$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+
+# Opt Ags + p3 + utr / orf
+d4 <- getComparisonTable(op4$par,ob)
+cors4 <- sapply(split(d4, d4$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+
+
+# get the df
+df1 <- data.frame(miRNA=names(cors1), r2=cors1)
+df1$type <- "opt ags"
+
+df2 <- data.frame(miRNA=names(cors2), r2=cors2)
+df2$type <- "opt ags + p3"
+
+df3 <- data.frame(miRNA=names(cors3), r2=cors3)
+df3$type <- "opt ags + utr/orf"
+
+df4 <- data.frame(miRNA=names(cors4), r2=cors4)
+df4$type <- "opt ags + utr/orf + p3"
+
+df <- rbind(df1,df2,df3,df4)
+df$miRNA <- gsub("hsa.","",df$miRNA)
+df$miRNA <- gsub(".5p","",df$miRNA)
+df$miRNA <- gsub(".3p","",df$miRNA)
+
+saveRDS(df,"BarGraph_p3_DF_HEK.rds")
+
+ggplot(df, aes(miRNA, r2, fill = type)) + 
+  geom_col(position="dodge") +
+  theme_bw() + 
+  scale_fill_nejm(alpha = 0.8)
+
+```
+
+
+
+
+
+

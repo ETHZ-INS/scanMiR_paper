@@ -1,0 +1,203 @@
+---
+title: "parameters_orig_all"
+author: "Michael Soutschek"
+date: "10 12 2020"
+output: html_document
+---
+
+
+
+
+```{r}
+suppressPackageStartupMessages({
+  library(Biostrings)
+  library(BiocParallel)
+  library(GenomicRanges)
+  library(ensembldb)
+  library(BSgenome.Hsapiens.UCSC.hg19)
+  library(ggsci)
+  library(scanMiR)
+})
+```
+
+
+
+```{r fns}
+domnorm <- function(x, useMedian=FALSE){
+  y <- setNames(seq_len(ncol(x)), colnames(x))
+  if(useMedian){
+    x <- as.data.frame(lapply(y, FUN=function(i){
+      x[,i]-matrixStats::rowMedians(as.matrix(x[,-i]))
+    }), row.names=row.names(x))
+  }else{
+    x <- as.data.frame(lapply(y, FUN=function(i) x[,i]-rowMeans(x[,-i])), row.names=row.names(x))
+  }  
+  x
+}
+
+# aggregate all miRNAs using the given parameters
+aggAll <- function(m,ll, params=c(), ags=NULL){
+  bp <- c(b=0.5735, c=-1.7091, p3=0, bg = 0, coef_utr = 0, coef_orf = 0)
+  bp <- c(bp,ags)
+  bp[names(params)] <- as.numeric(params)
+  res <- bplapply(setNames(names(m),names(m)), BPPARAM=MulticoreParam(length(m)), FUN=function(x){
+    if(!("ag" %in% names(bp)) && !is.null(bp[[x]])) bp[["ag"]] <- bp[[x]]
+    x <- .aggregate_miRNA(m[[x]],ll = ll, ag=bp[["ag"]], b=bp[["b"]], c=bp[["c"]], p3=bp[["p3"]], coef_utr=bp[["coef_utr"]],coef_orf = bp[["coef_orf"]], toInt = FALSE)
+    y <- x$repression
+    names(y) <- x$transcript
+    y
+  })
+  txs <- unique(unlist(lapply(res, FUN=names)))
+  x <- sapply(res, FUN=function(x) x[txs])
+  row.names(x) <- txs
+  x[is.na(x)] <- 0
+  domnorm(x)
+}
+
+getComparisonTable <- function(params=c(), ob, ags=NULL){
+  bp <- c(b=0.5735, c=-1.7091, p3=0, bg = 0, coef_utr = 0, coef_orf = 0)
+  bp[names(params)] <- as.numeric(params)
+  d <- aggAll(m,ll, bp, ags = ags)
+  colnames(ob) <- gsub("-",".",colnames(ob))
+  d <- as.matrix(d[row.names(ob),colnames(ob)])
+  d[is.na(d)] <- 0
+  d <- reshape2::melt(d, varnames=c("transcript","miRNA"), value.name="predicted")
+  d$observed <- reshape2::melt(as.matrix(ob))[,"value"]
+  d
+}
+
+
+#ms: use this one!!
+costCor <- function(params,ags){
+  d <- getComparisonTable(params, ob, ags = ags)
+  m <- (sapply(split(d, d$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2))
+  sum(m)+median(m)+min(m)
+}
+```
+
+
+
+## Data for the length-score fitting
+```{r}
+# starting values:
+op_orig <- readRDS("orig_p3.rds")
+par <- op_orig$par
+ags<- par[!names(par) %in% "p3"]
+
+m <- readRDS("../hsa.12mirs.HELA.fullScan.GR.rds")
+# prepare length data
+ll <- as.data.frame(metadata(m)$length.info)
+ll$transcript <- row.names(ll)
+# prepare m
+m$transcript <- as.factor(seqnames(m))
+m <- split(mcols(m), m$miRNA)
+m <- m[c("cel-lsy-6","hsa-miR-1-3p","hsa-miR-124-3p","hsa-miR-155-5p","hsa-miR-7-5p"),]
+
+ob <- read.delim("../data/GSE140217_HeLa_transfection_logtpm_batchnormalized.txt", row.names=1)
+ob <- ob[,which(names(ob) %in% c("lsy6","mir1","mir124","mir155","mir7"))]
+ob <- domnorm(ob)
+colnames(ob) <- names(m) # unsafe - they just happen to match
+```
+
+
+# Fitting
+
+# only utr / orf
+```{r}
+# op_utr <- optim(par=c(coef_utr = -0.2, coef_orf = -0.2), fn=costCor,ags=ags, control=list(fnscale=-1))
+# op_utr$par
+# saveRDS(op_utr,"orig_utr_orf.rds")
+```
+
+# fitting ags & utr / orf
+```{r}
+costCor2 <- function(params){
+  d <- getComparisonTable(params, ob, ags = ags)
+  m <- (sapply(split(d, d$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2))
+  sum(m)+median(m)+min(m)
+}
+
+op <- optim(par=c(coef_utr = -0.2, coef_orf = -0.2, ags), fn=costCor2, control=list(fnscale=-1))
+op$par
+saveRDS(op,"orig_ags_fitted_utr_orf.rds")
+```
+
+
+# fitting ags & utr / orf & p3
+```{r}
+costCor2 <- function(params){
+  d <- getComparisonTable(params, ob, ags = ags)
+  m <- (sapply(split(d, d$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2))
+  sum(m)+median(m)+min(m)
+}
+
+op <- optim(par=c(coef_utr = -0.2, coef_orf = -0.2, ags, p3 = 0.1), fn=costCor2, control=list(fnscale=-1))
+op$par
+saveRDS(op,"orig_ags_fitted_utr_orf_p3.rds")
+```
+
+
+
+## Checking it out
+```{r}
+op_utr <- readRDS("orig_utr_orf.rds")
+d <- getComparisonTable(op_utr$par, ob, ags = ags)
+# get the per-miRNA correlations:
+cors <- sapply(split(d, d$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+ggplot(data.frame(miRNA=names(cors), r2=cors), aes(miRNA, r2)) + geom_col() + coord_flip() + geom_text(aes(label=round(cors,4)))
+# plot:
+LSD::heatscatter(d$predicted, d$observed,xlim = c(-1.5,1.5), ylim = c(-1.5,1.5))
+ggplot(d,aes(x = predicted, y = observed)) + geom_point(alpha = 0.5) + xlim(-1.5,1.5) + ylim (-1.5,1.5)
+```
+
+
+
+
+
+# Compare the values
+```{r}
+# par_all <- c(par,op_utr$par)
+# 
+# # Biochem + p3 + utr/orf
+# d2 <- getComparisonTable(params=par_all,ob)
+# cors2 <- sapply(split(d2, d2$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+# 
+# # Biochem (only new ags)
+# d3 <- getComparisonTable(params=c(),ob,ags = ags)
+# cors3 <- sapply(split(d3, d3$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+# 
+# 
+# # get the df
+# df1 <- data.frame(miRNA=names(cors), r2=cors)
+# df1$type <- "Biochem + utr/orf"
+# 
+# df2 <- data.frame(miRNA=names(cors2), r2=cors2)
+# df2$type <- "Biochem + p3 + utr/orf"
+# 
+# df <- readRDS("df_p3.rds")
+# 
+# df <- rbind(df,df1,df2)
+# saveRDS(df,"df_all.rds")
+# 
+# ggplot(df, aes(miRNA, r2, fill = type)) + 
+#   geom_col(position="dodge") +
+#   theme_bw() + 
+#   scale_fill_nejm(alpha = 0.8)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

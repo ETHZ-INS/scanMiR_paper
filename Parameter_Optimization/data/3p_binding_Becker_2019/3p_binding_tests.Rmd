@@ -1,0 +1,102 @@
+---
+title: "3p_binding_greenleaf_tests"
+author: "Michael Soutschek"
+date: "17 11 2020"
+output: html_document
+---
+
+
+
+# Initialize the models
+```{r}
+let7a <- read.csv("let7a_model_parameters.csv")
+mir21 <- read.csv("miR21_model_parameters.csv")
+```
+
+
+
+# Suppl Binding
+grep everything between pos. 12-17
+```{r}
+let7a_3p <- let7a[grep("[ACGU][1][2-7]",let7a$Parameter),]
+mir21_3p <- mir21[grep("[ACGU][1][2-7]",mir21$Parameter),]
+```
+
+
+# Get matrixes
+```{r}
+mat_let7a_3p <- matrix(let7a_3p$Value..kcal.mol.,nrow = 4,byrow = TRUE)
+rownames(mat_let7a_3p) <- c("A", "C", "G", "U")
+
+mat_mir21_3p <- matrix(mir21_3p$Value..kcal.mol.,nrow = 4,byrow = TRUE)
+rownames(mat_mir21_3p) <- c("A", "C", "G", "U")
+```
+
+
+# rescale the matrices
+```{r}
+library(scales)
+mat_let7a_3p_comp <- -1 * mat_let7a_3p
+mat_let7a_3p_comp_sc <- rescale(mat_let7a_3p_comp)
+
+mat_mir21_3p_comp <- -1*mat_mir21_3p
+mat_mir21_3p_comp_sc <- rescale(mat_mir21_3p_comp)
+```
+
+
+# plot the motifs
+```{r}
+library(motifStack)
+
+markerText_let7a <- new("marker", type="text", start=c(2.5), 
+                  label=c("let7a_3p_seq: GUUGUA"), gp=gpar(cex =2, col="black"))
+
+markerText_mir21 <- new("marker", type="text", start=c(2.5), 
+                  label=c("mir21_3p_seq: ACUGAU"), gp=gpar(cex =2, col="black"))
+
+
+motif_let7a <- new("psam", mat= mat_let7a_3p_comp_sc, name="let7a_3p", markers = list(markerText_let7a))
+motif_mir21<-new("psam", mat=mat_mir21_3p_comp_sc, name="mir21", markers = list(markerText_mir21))
+```
+
+```{r}
+plot(motif_let7a)
+```
+
+
+```{r}
+plot(motif_mir21)
+```
+
+
+# Calculate by hand average wobble scores
+1) mir21
+```{r}
+# Possible wobble positions in mir21 for the main wobble pair G::U are:
+# 3,4,6
+# opt would be in these positions: A,C,A
+# w would be in these positions: G,U,G
+op_mir21 <- c(mat_mir21_3p_comp_sc["A",3],mat_mir21_3p_comp_sc["C",4],mat_mir21_3p_comp_sc["A",6])
+wob_mir21 <- c(mat_mir21_3p_comp_sc["G",3],mat_mir21_3p_comp_sc["U",4],mat_mir21_3p_comp_sc["G",6])
+
+mean(wob_mir21) / mean(op_mir21)
+```
+
+
+1) let7a
+```{r}
+# Possible wobble positions are for the main wobble pair G::U are:
+# 1,2,3,4,5
+# opt would be in these positions: C,A,A,C,A
+# w would be in these positions: U,G,G,U,G
+op_let7a <- c(mat_let7a_3p_comp_sc["C",1],mat_let7a_3p_comp_sc["A",2],mat_let7a_3p_comp_sc["A",3],mat_let7a_3p_comp_sc["C",4],mat_let7a_3p_comp_sc["A",5])
+
+wob_let7a <- c(mat_let7a_3p_comp_sc["U",1],mat_let7a_3p_comp_sc["G",2],mat_let7a_3p_comp_sc["G",3],mat_let7a_3p_comp_sc["U",4],mat_let7a_3p_comp_sc["G",5])
+
+mean(wob_let7a) / mean(op_let7a)
+
+```
+
+
+
+

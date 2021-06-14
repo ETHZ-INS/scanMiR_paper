@@ -1,0 +1,257 @@
+---
+title: "Corr_Figure_Hela"
+author: "Michael Soutschek"
+date: "26 3 2021"
+output: html_document
+---
+
+
+```{r}
+suppressPackageStartupMessages({
+  library(Biostrings)
+  library(BiocParallel)
+  library(GenomicRanges)
+  library(ensembldb)
+  library(BSgenome.Hsapiens.UCSC.hg19)
+  library(ggsci)
+  library(data.table)
+  library(viridis)
+})
+```
+
+
+```{r}
+source("~/scanMir/R/aggregation.R")
+```
+
+
+
+```{r fns}
+domnorm <- function(x, useMedian=FALSE){
+  y <- setNames(seq_len(ncol(x)), colnames(x))
+  if(useMedian){
+    x <- as.data.frame(lapply(y, FUN=function(i){
+      x[,i]-matrixStats::rowMedians(as.matrix(x[,-i]))
+    }), row.names=row.names(x))
+  }else{
+    x <- as.data.frame(lapply(y, FUN=function(i) x[,i]-rowMeans(x[,-i])), row.names=row.names(x))
+  }  
+  x
+}
+
+# aggregate all miRNAs using the given parameters
+aggAll <- function(m, params=c(), ags=NULL){
+  bp <- c(b=0.5735, c=-1.7091, p3=0)
+  bp <- c(bp, ags)
+  bp[names(params)] <- as.numeric(params)
+  res <- bplapply(setNames(names(m),names(m)), BPPARAM=MulticoreParam(length(m)), FUN=function(x){
+    if(!("ag" %in% names(bp)) && !is.null(bp[[x]])) bp[["ag"]] <- bp[[x]]
+    x <- .aggregate_miRNA(m[[x]], ag=bp[["ag"]], b=bp[["b"]], c=bp[["c"]], p3=bp[["p3"]],toInt = FALSE)
+    y <- x$repression
+    names(y) <- x$transcript
+    y
+  })
+  txs <- unique(unlist(lapply(res, FUN=names)))
+  x <- sapply(res, FUN=function(x) x[txs])
+  row.names(x) <- txs
+  x[is.na(x)] <- 0
+  domnorm(x)
+}
+
+getComparisonTable <- function(params=c(), ob, ags=NULL){
+  bp <- c(b=0.5735, c=-1.7091, p3=0)
+  bp[names(params)] <- as.numeric(params)
+  d <- aggAll(m, bp, ags = ags)
+  colnames(ob) <- gsub("-",".",colnames(ob))
+  d <- as.matrix(d[row.names(ob),colnames(ob)])
+  d[is.na(d)] <- 0
+  d <- reshape2::melt(d, varnames=c("transcript","miRNA"), value.name="predicted")
+  d$observed <- reshape2::melt(as.matrix(ob))[,"value"]
+  d
+}
+```
+
+
+
+
+#McGeary Functions
+```{r}
+# aggregate all miRNAs of the McGeary,Lin paper using the given parameters
+aggAll_2 <- function(m, params=c(), ags=NULL){
+  bp <- c(b=0.5735, c=-1.7091)
+  bp <- c(bp, ags)
+  bp[names(params)] <- as.numeric(params)
+  res <- lapply(setNames(names(m),names(m)), 
+                #BPPARAM=MulticoreParam(length(m)), 
+                  FUN=function(x){
+    if(!("ag" %in% names(bp)) && !is.null(bp[[x]])) bp[["ag"]] <- bp[[x]]
+    x <- .aggregate_miRNA_2(m[[x]], ag=bp[["ag"]], b=bp[["b"]], c=bp[["c"]])
+    y <- x$repression
+    names(y) <- x$transcript
+    y
+  })
+  txs <- unique(unlist(lapply(res, FUN=names)))
+  x <- sapply(res, FUN=function(x) x[txs])
+  row.names(x) <- txs
+  x[is.na(x)] <- 0
+  domnorm(x)
+}
+
+
+
+
+.aggregate_miRNA_2 <- function(m, ag=-4.863126 , b=0.5735, c=-1.7091){
+  m$ORF <- as.integer(m$in_ORF)
+  m <- m[m$log_kd < 0,]
+  m$log_kd <- -m$log_kd
+  m$N <- 1 / (1 + exp(-1 * (ag + m$log_kd + c*m$ORF) ))
+  m$log_kd <- NULL
+  m$N_bg <- 1 / (1 + exp(-1 * (ag  + c*m$ORF) ))
+  m <- as.data.frame(rowsum(as.matrix(m[,c("N","N_bg")]), group=m$transcript))
+  m <- data.frame( transcript=row.names(m),
+                   repression=log(1+exp(b)*m$N_bg) - log(1 + exp(b)*m$N) )
+  m
+}
+
+
+getComparisonTable_2 <- function(params=c(), ob, ags=NULL){
+  bp <- c(b=0.5735, c=-1.7091)
+  bp[names(params)] <- as.numeric(params)
+  d <- aggAll_2(m2, bp, ags = ags)
+  colnames(ob) <- gsub("-",".",colnames(ob))
+  d <- as.matrix(d[row.names(ob),colnames(ob)])
+  d[is.na(d)] <- 0
+  d <- reshape2::melt(d, varnames=c("transcript","mir"), value.name="predicted")
+  d$observed <- reshape2::melt(as.matrix(ob))[,"value"]
+  d
+}
+```
+
+
+
+## Load Data
+
+#us
+```{r}
+m <- readRDS("../../../Parameter_Optimization/data/hsa.12mirs.HELA.fullScan.GR.rds")
+
+# prepare m
+m$transcript <- as.factor(seqnames(m))
+m <- split(mcols(m), m$miRNA)
+m <- m[c("cel-lsy-6","hsa-miR-1-3p","hsa-miR-124-3p","hsa-miR-155-5p","hsa-miR-7-5p")]
+
+# Get the Transfection Results
+ob <- read.delim("../../../Parameter_Optimization/data/McGeary_2019_raw/GSE140217_HeLa_transfection_logtpm_batchnormalized.txt", row.names=1)
+
+# filter
+ob <- ob[,colnames(ob)[colnames(ob) %in% c("lsy6","mir1","mir124","mir155","mir7")]]
+ob <- domnorm(ob)
+colnames(ob) <- names(m)
+```
+
+
+# McGeary
+```{r}
+# Get the Feature Files
+feature_files <- list.files("../../../Parameter_Optimization/data/McGeary_2019_processed/HELA_Features_McGeary_Scan", full.names = T)
+mirs_full <- gsub("\\.txt", "", list.files("../../../Parameter_Optimization/data/McGeary_2019_processed/HELA_Features_McGeary_Scan", full.names = F))
+names(feature_files) <- mirs_full
+hela_mirs <- mirs_full[!grepl("pass", mirs_full)]
+hela_mirs <- hela_mirs[hela_mirs %in% c("cel-lsy-6","hsa-miR-1","hsa-miR-124-3p","hsa-miR-155-5p","hsa-miR-7-5p")]
+
+m2 <- list()
+for(i in hela_mirs){
+  mir_feature <- fread(feature_files[i], sep="\t", stringsAsFactors = F) 
+  mir_feature <- as.data.frame(mir_feature)
+  m2[[i]] <- mir_feature
+}
+
+names(m2)[2] <- "hsa-miR-1-3p"
+```
+
+
+
+# Compare the values
+```{r}
+op1 <- readRDS("../../../Parameter_Optimization/ag_HELA/opt_ags_us_r2_hela_RBNS.rds")
+op2 <- readRDS("../../../Parameter_Optimization/ag_HELA_McGeary_Lin/opt_ags_McGearyLin_r2_hela_RBNS.rds")
+
+#adapt the miR1 name
+names(op2$par)[2] <- "hsa-miR-1-3p"
+
+ag1 <- op1$par["hsa-miR-1-3p"]
+ag2 <- op2$par["hsa-miR-1-3p"]
+
+### scanMiR
+# repression
+m1_1 <- as.data.table(unlist(m["hsa-miR-1-3p"]))
+m1_1$miRNA <- droplevels(m1_1$miRNA)
+mir1_Sc <- .aggregate_miRNA(m1_1,ag = ag1, p3 = 0, coef_utr = 0,coef_orf = 0,keepSiteInfo = TRUE)
+mir1_Sc$sites <- rowSums(mir1_Sc[,4:12])
+
+
+# observed
+ob_mir1 <- ob[,"hsa-miR-1-3p",drop = FALSE]
+colnames(ob_mir1) <- "observed"
+mir1_Sc <- merge(mir1_Sc[,c("transcript","repression","sites")],ob_mir1,by.x = "transcript",by.y = 0,all.y = TRUE)
+mir1_Sc[is.na(mir1_Sc)] <- 0
+
+
+# correlation & finalize
+d1 <- getComparisonTable(op1$par,ob)
+cors1 <- sapply(split(d1, d1$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+cors1_mir1 <- cors1["hsa.miR.1.3p"]
+mir1_Sc$cor <- cors1_mir1
+mir1_Sc$Algorithm <- "scanMiR"
+
+
+
+### McGeary
+m2_1 <- as.data.table(m2$`hsa-miR-1-3p`)
+mir1_Mc <- .aggregate_miRNA_2(m2_1,ag=ag2)
+
+m2_type_table <- dcast(m2_1[,.(N=.N), by=c("transcript","stype")],
+                             formula=transcript~stype, value.var="N", fill=0L)
+m2_type_table$sites <- rowSums(m2_type_table[,2:7])
+mir1_Mc <- merge(mir1_Mc,m2_type_table[,c("transcript","sites")],by = "transcript", all.x = TRUE)
+
+# observed
+mir1_Mc <- merge(mir1_Mc,ob_mir1,by.x = "transcript",by.y = 0,all.y = TRUE)
+mir1_Mc[is.na(mir1_Mc)] <- 0
+
+# correlation
+d2 <- getComparisonTable_2(op2$par,ob)
+cors2 <- sapply(split(d2, d2$mir), FUN=function(x) cor(x$observed,x$predicted)^2)
+cors2_mir1 <- cors2["hsa.miR.1.3p"]
+mir1_Mc$cor <- cors2_mir1
+mir1_Mc$Algorithm <- "McGeary Lin"
+```
+
+
+
+
+#Plot
+```{r}
+df <- rbind(mir1_Sc,mir1_Mc)
+saveRDS(df,"CorrDF_MiR1.rds")
+
+ggplot(df,aes(x = -log2(exp(repression)),y = observed, color = sites)) + geom_point(alpha = 0.7) + 
+  xlim(0,2.5) + facet_grid(~Algorithm, scales = "fixed") + 
+  xlab("Predicted repression (log2)") + ylab("Measured Fold Change (mean normalized)") + 
+  scale_color_viridis() + theme_classic()
+
+ggsave("CorrGraph_Mir1.png",width = 10, height = 6)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

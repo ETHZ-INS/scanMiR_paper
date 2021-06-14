@@ -1,0 +1,230 @@
+---
+title: "BarGraph_orig"
+author: "Michael Soutschek"
+date: "9 3 2021"
+output: html_document
+---
+
+
+
+```{r}
+suppressPackageStartupMessages({
+  library(Biostrings)
+  library(BiocParallel)
+  library(GenomicRanges)
+  library(ensembldb)
+  library(BSgenome.Hsapiens.UCSC.hg19)
+  library(ggsci)
+  library(data.table)
+  library(scanMiR)
+})
+```
+
+
+
+
+```{r fns}
+domnorm <- function(x, useMedian=FALSE){
+  y <- setNames(seq_len(ncol(x)), colnames(x))
+  if(useMedian){
+    x <- as.data.frame(lapply(y, FUN=function(i){
+      x[,i]-matrixStats::rowMedians(as.matrix(x[,-i]))
+    }), row.names=row.names(x))
+  }else{
+    x <- as.data.frame(lapply(y, FUN=function(i) x[,i]-rowMeans(x[,-i])), row.names=row.names(x))
+  }  
+  x
+}
+
+# aggregate all miRNAs using the given parameters
+aggAll <- function(m,ll, params=c(), ags=NULL){
+  bp <- c(b=0.5735, c=-1.7091, p3=0, bg = 0, coef_utr = 0, coef_orf = 0)
+  bp <- c(bp,ags)
+  bp[names(params)] <- as.numeric(params)
+  res <- bplapply(setNames(names(m),names(m)), BPPARAM=MulticoreParam(length(m)), FUN=function(x){
+    if(!("ag" %in% names(bp)) && !is.null(bp[[x]])) bp[["ag"]] <- bp[[x]]
+    x <- .aggregate_miRNA(m[[x]],ll = ll, ag=bp[["ag"]], b=bp[["b"]], c=bp[["c"]], p3=bp[["p3"]], coef_utr=bp[["coef_utr"]],coef_orf = bp[["coef_orf"]], toInt = FALSE)
+    y <- x$repression
+    names(y) <- x$transcript
+    y
+  })
+  txs <- unique(unlist(lapply(res, FUN=names)))
+  x <- sapply(res, FUN=function(x) x[txs])
+  row.names(x) <- txs
+  x[is.na(x)] <- 0
+  domnorm(x)
+}
+
+getComparisonTable <- function(params=c(), ob, ags=NULL){
+  bp <- c(b=0.5735, c=-1.7091, p3=0, bg = 0, coef_utr = 0, coef_orf = 0)
+  bp[names(params)] <- as.numeric(params)
+  d <- aggAll(m,ll, bp, ags = ags)
+  colnames(ob) <- gsub("-",".",colnames(ob))
+  d <- as.matrix(d[row.names(ob),colnames(ob)])
+  d[is.na(d)] <- 0
+  d <- reshape2::melt(d, varnames=c("transcript","miRNA"), value.name="predicted")
+  d$observed <- reshape2::melt(as.matrix(ob))[,"value"]
+  d
+}
+```
+
+
+## Data
+```{r}
+m <- readRDS(file = "../../../Parameter_Optimization/data/hsa.12mirs.HEK.fullScan.GR.rds")
+ll <- as.data.frame(metadata(m)$length.info)
+ll$transcript <- row.names(ll)
+m$transcript <- as.factor(seqnames(m))
+m <- split(mcols(m), m$miRNA)
+
+ob <- domnorm(read.delim("../../../Parameter_Optimization/data/McGeary_2019_raw/GSE140218_HEK293FT_transfection_logtpm_batchnormalized.txt", row.names=1))
+colnames(ob) <- names(m) # unsafe - they just happen to match
+```
+
+
+
+#McGeary Functions
+```{r}
+# aggregate all miRNAs of the McGeary,Lin paper using the given parameters
+aggAll_2 <- function(m, params=c(), ags=NULL){
+  bp <- c(b=0.5735, c=-1.7091)
+  bp <- c(bp, ags)
+  bp[names(params)] <- as.numeric(params)
+  res <- bplapply(setNames(names(m),names(m)), BPPARAM=MulticoreParam(length(m)),
+                  FUN=function(x){
+    if(!("ag" %in% names(bp)) && !is.null(bp[[x]])) bp[["ag"]] <- bp[[x]]
+    x <- .aggregate_miRNA_2(m[[x]], ag=bp[["ag"]], b=bp[["b"]], c=bp[["c"]])
+    y <- x$repression
+    names(y) <- x$transcript
+    y
+  })
+  txs <- unique(unlist(lapply(res, FUN=names)))
+  x <- sapply(res, FUN=function(x) x[txs])
+  row.names(x) <- txs
+  x[is.na(x)] <- 0
+  domnorm(x)
+}
+
+
+
+
+.aggregate_miRNA_2 <- function(m, ag=-4.863126 , b=0.5735, c=-1.7091){
+  m$ORF <- as.integer(m$in_ORF)
+  m <- m[m$log_kd < 0,]
+  m$log_kd <- -m$log_kd
+  m$N <- 1 / (1 + exp(-1 * (ag + m$log_kd + c*m$ORF) ))
+  m$log_kd <- NULL
+  m$N_bg <- 1 / (1 + exp(-1 * (ag  + c*m$ORF) ))
+  m <- as.data.frame(rowsum(as.matrix(m[,c("N","N_bg")]), group=m$transcript))
+  m <- data.frame( transcript=row.names(m),
+                   repression=log(1+exp(b)*m$N_bg) - log(1 + exp(b)*m$N) )
+  m
+}
+
+
+getComparisonTable_2 <- function(params=c(), ob, ags=NULL){
+  bp <- c(b=0.5735, c=-1.7091)
+  bp[names(params)] <- as.numeric(params)
+  d <- aggAll_2(m2, bp, ags = ags)
+  colnames(d) <- colnames(ob) #unsave
+  d <- as.matrix(d[row.names(ob),colnames(ob)])
+  d[is.na(d)] <- 0
+  d <- reshape2::melt(d, varnames=c("transcript","mir"), value.name="predicted")
+  d$observed <- reshape2::melt(as.matrix(ob))[,"value"]
+  d
+}
+```
+
+
+
+
+
+
+
+
+# Data McGeary et al
+```{r}
+# Get the Feature Files
+feature_files <- list.files("../../../Parameter_Optimization/data/McGeary_2019_processed/HEK_Features_McGeary_Scan/", full.names = T)
+mirs_full <- gsub("\\.txt", "", list.files("../../../Parameter_Optimization/data/McGeary_2019_processed/HEK_Features_McGeary_Scan/", full.names = F))
+names(feature_files) <- mirs_full
+hek_mirs <- mirs_full[!grepl("pass", mirs_full)]
+
+m2 <- list()
+for(i in hek_mirs){
+  mir_feature <- fread(feature_files[i], sep="\t", stringsAsFactors = F) 
+  mir_feature <- as.data.frame(mir_feature)
+  m2[[i]] <- mir_feature
+}
+```
+
+
+
+
+
+# Compare the values
+
+```{r}
+op1 <- readRDS("../../../Parameter_Optimization/ag_HEK/opt_ags_us_fitted.rds")
+op2 <- readRDS("../../../Parameter_Optimization/ag_HEK/opt_global_ag_hek.rds")
+op3 <- readRDS("../../../Parameter_Optimization/ag_HEK_McGeary_Lin/opt_ags_McGearyLin_r2_hek.rds")
+
+# Opt Ags
+d1 <- getComparisonTable(op1$par,ob)
+cors1 <- sapply(split(d1, d1$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+
+# Glob ag
+d2 <- getComparisonTable(op2$par,ob)
+cors2 <- sapply(split(d2, d2$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+
+# Opt Ags + utr / orf
+d3 <- getComparisonTable_2(op3$par,ob)
+cors3 <- sapply(split(d3, d3$mir), FUN=function(x) cor(x$observed,x$predicted)^2)
+
+
+# get the df
+df1 <- data.frame(miRNA=names(cors1), r2=cors1)
+df1$type <- "scanMiR opt ags"
+
+df2 <- data.frame(miRNA=names(cors2), r2=cors2)
+df2$type <- "scanMiR Global ag"
+
+df3 <- data.frame(miRNA=names(cors3), r2=cors3)
+df3$type <- "McGeary Lin opt ags"
+
+
+# Get the Targetscan File
+df4 <- readRDS("../../../Targetscan_Corr/Run_Targetscan/Targetscan_corr_hek.rds")
+df4$type <- "Targetscan"
+df4$condition <- NULL
+colnames(df4)[2] <- "miRNA"
+
+
+
+
+df <- rbind(df1,df2,df3,df4)
+df$miRNA <- gsub("hsa.","",df$miRNA)
+df$miRNA <- gsub(".5p","",df$miRNA)
+df$miRNA <- gsub(".3p","",df$miRNA)
+df$miRNA <- gsub("-",".",df$miRNA)
+df$miRNA[37:48] <- df$miRNA[1:12]
+
+df$type = factor(df$type,levels = c("McGeary Lin opt ags","scanMiR opt ags",
+                                        "scanMiR Global ag","Targetscan"))
+
+#save
+saveRDS(df,"BarGraph_DF.rds")
+
+ggplot(df, aes(miRNA, r2, fill = type)) + 
+  geom_col(position="dodge") +
+  theme_bw() + 
+  scale_fill_nejm(alpha = 0.8)
+
+ggsave("bar_graph_HEK.png",height = 6,width = 10)
+```
+
+
+
+
+
+

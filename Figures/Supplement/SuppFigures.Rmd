@@ -1,0 +1,56 @@
+---
+title: "scanMiR: a biochemically-based toolkit for versatile and efficient microRNA target prediction"
+subtitle: "Supplementary Figures"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+author:
+  - "Michael Soutschek"
+  - "Fridolin Gross"
+  - "Gerhard Schratt"
+  - "Pierre-Luc Germain"
+
+output:
+  pdf_document:
+    fig_width: 8
+    fig_height: 6
+---
+
+```{r setup, include=FALSE}
+# comment this out to print code
+knitr::opts_chunk$set(echo=FALSE)
+FIG_NB <- 0
+FIG_STRING <- "Supplementary Figure S"
+getFigNb <- function(increment=FALSE){
+  if(increment) FIG_NB <<- FIG_NB + 1
+  paste0(FIG_STRING,FIG_NB)
+}
+```
+
+\vspace{2cm}
+
+```{r child='Suppl_1/Suppl_Aff.rmd', cache=TRUE}
+```
+
+\newpage
+
+```{r child='Suppl_2/Suppl1.Rmd', cache=TRUE}
+```
+
+\newpage
+
+```{r child='Suppl_3/Suppl_2.Rmd', cache=TRUE}
+```
+
+\newpage
+
+```{r child='Suppl_4/Suppl_4.1.Rmd', cache=TRUE}
+```
+
+\newpage
+
+```{r child='Suppl_5/Suppl_4.2.Rmd', cache=TRUE}
+```
+
+\newpage
+
+```{r child='Suppl_6/Suppl_5.Rmd', cache=FALSE}
+```

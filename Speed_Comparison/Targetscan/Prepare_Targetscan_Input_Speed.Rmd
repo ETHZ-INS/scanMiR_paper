@@ -1,0 +1,167 @@
+---
+title: "Prepare_Targetscan_Input"
+author: "Michael Soutschek"
+date: "23 2 2021"
+output: html_document
+---
+
+```{r}
+suppressPackageStartupMessages({
+  library(Biostrings)
+  library(BiocParallel)
+  library(GenomicRanges)
+  library(ensembldb)
+  library(BSgenome.Hsapiens.UCSC.hg19)
+  library(data.table)
+  library(tidyverse)
+})
+```
+
+
+#Get names
+```{r}
+names10 <- readRDS("../scanMiR/namesSeqs10.rds")
+names100 <- readRDS("../scanMiR/namesSeqs100.rds")
+names1000 <- readRDS("../scanMiR/namesSeqs1000.rds")
+```
+
+
+
+# load data
+```{r}
+g <- rtracklayer::import.gff("/mnt/schratt/enrichMir_datasets/bartel_assembly/HEK/GSE140217_HEK_transcriptannotations.gtf.gz")
+```
+
+
+
+# Prepare ORF Sequences in the right format
+```{r}
+g3 <- g
+mcols(g3)$name <- mcols(g3)$transcript_id
+g3 <- g3[g3$type == "CDS"]
+g3 <- as.list(split(g3,strand(g3)))
+g3[["+"]] <- g3[["+"]][order(start(g3[["+"]]))]
+g3[["-"]] <- g3[["-"]][order(end(g3[["-"]]),decreasing=TRUE)]
+g3 <- c(g3[["+"]],g3[["-"]])
+seqs <- extractTranscriptSeqs(BSgenome.Hsapiens.UCSC.hg19, split(g3,g3$transcript_id))
+ORF_df <- data.frame(names = names(seqs),species = 9606, seq = seqs)
+```
+
+#10 genes   
+```{r}
+ORF_df_10 <- ORF_df[ORF_df$names %in% names10,]
+write.table(ORF_df_10,"./Input/HEK_ORF_Seqs_df_10.csv",sep = "\t",row.names = FALSE,col.names = FALSE)
+```
+
+#100 genes   
+```{r}
+ORF_df_100 <- ORF_df[ORF_df$names %in% names100,]
+write.table(ORF_df_100,"./Input/HEK_ORF_Seqs_df_100.csv",sep = "\t",row.names = FALSE,col.names = FALSE)
+```
+
+#1000 genes   
+```{r}
+ORF_df_1000 <- ORF_df[ORF_df$names %in% names1000,]
+write.table(ORF_df_1000,"./Input/HEK_ORF_Seqs_df_1000.csv",sep = "\t",row.names = FALSE,col.names = FALSE)
+```
+
+
+# Prepare UTR file
+```{r}
+hUTRs <- fread("../../Targetscan_Corr/Run_Targetscan/Input/HEK_UTR_Seqs_df.csv")
+```
+# 10 genes
+```{r}
+hUTRs_10 <- hUTRs[hUTRs$V1 %in% names10,]
+write.table(hUTRs_10,"./Input/HEK_UTR_Seqs_df_10.csv",sep = "\t",row.names = FALSE,col.names = FALSE)
+```
+
+# 100 genes
+```{r}
+hUTRs_100 <- hUTRs[hUTRs$V1 %in% names100,]
+write.table(hUTRs_100,"./Input/HEK_UTR_Seqs_df_100.csv",sep = "\t",row.names = FALSE,col.names = FALSE)
+```
+
+# 1000 genes
+```{r}
+hUTRs_1000 <- hUTRs[hUTRs$V1 %in% names1000,]
+write.table(hUTRs_1000,"./Input/HEK_UTR_Seqs_df_1000.csv",sep = "\t",row.names = FALSE,col.names = FALSE)
+```
+
+
+
+
+## Prepare miRNAs
+
+#Hek Mirs
+```{r}
+hek_mirs <- c("hsa-miR-122-5p", "hsa-miR-133a-3p.1", 
+"hsa-miR-138-5p", "hsa-miR-145-5p", "hsa-miR-184", "hsa-miR-190a-5p", 
+"hsa-miR-200b-3p", "hsa-miR-216a-5p", "hsa-miR-217", "hsa-miR-219a-5p", 
+"hsa-miR-375", "hsa-miR-451a")
+```
+
+
+
+# Prepare human Seeds
+```{r}
+MiRs <- fread("../../Targetscan_Corr/Run_Targetscan/Targetscan/Raw_Files/miR_Family_Info.txt")
+MiRs_con <- MiRs[MiRs$`Family Conservation?` > 0,]
+MiRs_con <- MiRs_con[,1:3]
+MiRs_con <- dplyr::distinct(MiRs_con)
+
+# Prepare the species list
+MiRs_spec <- CharacterList(lapply(split(MiRs_con$`Species ID`, MiRs_con$`Seed+m8`),unique))
+seeds_in <- sapply(MiRs_spec,FUN=function(x){ paste(x, collapse = ";") })
+seeds_in <- data.frame(Species = seeds_in,row.names=names(seeds_in))
+seeds_in$`Seed+m8` <- row.names(seeds_in)
+
+hMiRs_fam <- MiRs[`Species ID` == 9606,c('miR family','Seed+m8')]
+hMiRs_fam <- dplyr::distinct(hMiRs_fam)
+
+seeds_in  <- merge(hMiRs_fam,seeds_in, by = 'Seed+m8', all.y = TRUE)
+seeds_in <- seeds_in[,c('miR family','Seed+m8','Species')]
+seeds_in <- seeds_in[grep("9606",seeds_in$Species),]
+
+#hek mirs seeds
+hek_seeds <- MiRs[MiRs$`MiRBase ID` %in% hek_mirs,]
+seeds_in_hek <- seeds_in[seeds_in$`Seed+m8` %in% hek_seeds$`Seed+m8`,]
+
+write.table(seeds_in_hek,"./Input/MiRs_HEK_seeds.csv",sep = "\t",quote = FALSE,row.names = FALSE,col.names = FALSE)
+```
+
+
+
+# Prepare human miRNA file
+```{r}
+MiRs <- fread("../../Targetscan_Corr/Run_Targetscan/Targetscan/Raw_Files/miR_Family_Info.txt")
+MiRs_con <- MiRs[MiRs$`Family Conservation?` > 0,]
+MiRs_con <- MiRs_con[,1:5]
+hMiRs_con <- MiRs_con[MiRs_con$`Species ID` == 9606,]
+
+# Prepare the lists
+MiRs_ID <- CharacterList(lapply(split(hMiRs_con$`MiRBase ID`, hMiRs_con$`Seed+m8`),unique))
+MiRs_ID <- sapply(MiRs_ID,FUN=function(x){ paste(x, collapse = ",") })
+MiRs_ID <- data.frame('MiRBase ID' = MiRs_ID,row.names=names(MiRs_ID))
+MiRs_ID$`Seed+m8` <- row.names(MiRs_ID)
+
+MiRs_Seq <- CharacterList(lapply(split(hMiRs_con$`Mature sequence`, hMiRs_con$`Seed+m8`),unique))
+MiRs_Seq <- sapply(MiRs_Seq,FUN=function(x){ paste(x, collapse = ",") })
+MiRs_Seq <- data.frame('Mature sequence' = MiRs_Seq,row.names=names(MiRs_Seq))
+MiRs_Seq$`Seed+m8` <- row.names(MiRs_Seq)
+
+MiRs_info <- merge(MiRs_ID,MiRs_Seq,by = 'Seed+m8')
+
+# merge
+hMiRs_in <- hMiRs_con[,1:3]
+hMiRs_in <- dplyr::distinct(hMiRs_in)
+hMiRs_in <- merge(hMiRs_in,MiRs_info,by = 'Seed+m8')
+
+# HEK
+hMiRs_in_HEK <- hMiRs_in[hMiRs_in$`Seed+m8` %in% hek_seeds$`Seed+m8`,]
+hMiRs_in_HEK <- hMiRs_in_HEK[,-1]
+
+write.table(hMiRs_in_HEK,"./Input/MiRs_file_HEK.csv",sep = "\t",quote = FALSE,row.names = FALSE,col.names = FALSE,)
+```
+
+

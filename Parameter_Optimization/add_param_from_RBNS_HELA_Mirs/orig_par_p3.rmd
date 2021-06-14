@@ -1,0 +1,252 @@
+---
+title: "parameters_orig_all"
+author: "Michael Soutschek"
+date: "10 12 2020"
+output: html_document
+---
+
+
+
+
+```{r}
+suppressPackageStartupMessages({
+  library(Biostrings)
+  library(BiocParallel)
+  library(GenomicRanges)
+  library(ensembldb)
+  library(BSgenome.Hsapiens.UCSC.hg19)
+  library(ggsci)
+  library(scanMiR)
+})
+```
+
+
+# run test scan 
+```{r}
+# hela_mirs <- c("hsa-miR-1-3p","hsa-miR-155-5p","hsa-miR-124-3p","hsa-miR-7-5p","hsa-miR-137-3p","hsa-miR-139-5p", "hsa-miR-143-3p","hsa-miR-144-3p","hsa-miR-153-3p","hsa-miR-182-5p","hsa-miR-199a-5p","hsa-miR-204-5p",
+#   "hsa-miR-205-5p","hsa-miR-216b-5p","hsa-miR-223-3p","cel-lsy-6") 
+# 
+# mods <- scanMiRData::getKdModels("hsa",NULL)
+# mods_1b <- readRDS("../Run_McGeary_Scripts/outputs/kds/cel_lsy_6.rds")
+# mods <- c(mods,mods_1b)
+# mods2 <- mods[hela_mirs]
+```
+
+```{r}
+# g <- rtracklayer::import.gff("../data/GSE140217_HeLa_transcriptannotations.gtf.gz")
+# g <- g[g$type!="5UTR"]
+# g <- as.list(split(g,strand(g)))
+# g[["+"]] <- g[["+"]][order(start(g[["+"]]))]
+# g[["-"]] <- g[["-"]][order(end(g[["-"]]),decreasing=TRUE)]
+# g <- c(g[["+"]],g[["-"]])
+# seqs <- extractTranscriptSeqs(BSgenome.Hsapiens.UCSC.hg19, split(g,g$transcript_id))
+# g.cds <- g[g$type=="CDS"]
+# orf.len <- sum(width(split(g.cds, g.cds$transcript_id)))
+# mcols(seqs)$ORF.length <- orf.len[names(seqs)] + 15
+# m <- findSeedMatches(seqs, mods2, maxLogKd=NULL, BP = MulticoreParam(12, progressbar=TRUE), ret="GRanges",p3.extra=TRUE,p3.params=list(maxMirLoop=5L, maxTargetLoop=9L, 
+#                                             maxLoopDiff=4L, mismatch=TRUE),)
+# saveRDS(m, file="../hsa.12mirs.HELA.fullScan.GR.rds")
+```
+
+
+```{r fns}
+domnorm <- function(x, useMedian=FALSE){
+  y <- setNames(seq_len(ncol(x)), colnames(x))
+  if(useMedian){
+    x <- as.data.frame(lapply(y, FUN=function(i){
+      x[,i]-matrixStats::rowMedians(as.matrix(x[,-i]))
+    }), row.names=row.names(x))
+  }else{
+    x <- as.data.frame(lapply(y, FUN=function(i) x[,i]-rowMeans(x[,-i])), row.names=row.names(x))
+  }  
+  x
+}
+
+# aggregate all miRNAs using the given parameters
+aggAll <- function(m,ll, params=c(), ags=NULL){
+  bp <- c(b=0.5735, c=-1.7091, p3=0, bg = 0, coef_utr = 0, coef_orf = 0)
+  bp <- c(bp,ags)
+  bp[names(params)] <- as.numeric(params)
+  res <- bplapply(setNames(names(m),names(m)), BPPARAM=MulticoreParam(length(m)), FUN=function(x){
+    if(!("ag" %in% names(bp)) && !is.null(bp[[x]])) bp[["ag"]] <- bp[[x]]
+    x <- .aggregate_miRNA(m[[x]],ll = ll, ag=bp[["ag"]], b=bp[["b"]], c=bp[["c"]], p3=bp[["p3"]], coef_utr=bp[["coef_utr"]],coef_orf = bp[["coef_orf"]], toInt = FALSE)
+    y <- x$repression
+    names(y) <- x$transcript
+    y
+  })
+  txs <- unique(unlist(lapply(res, FUN=names)))
+  x <- sapply(res, FUN=function(x) x[txs])
+  row.names(x) <- txs
+  x[is.na(x)] <- 0
+  domnorm(x)
+}
+
+getComparisonTable <- function(params=c(), ob, ags=NULL){
+  bp <- c(b=0.5735, c=-1.7091, p3=0, bg = 0, coef_utr = 0, coef_orf = 0)
+  bp[names(params)] <- as.numeric(params)
+  d <- aggAll(m,ll, bp, ags = ags)
+  colnames(ob) <- gsub("-",".",colnames(ob))
+  d <- as.matrix(d[row.names(ob),colnames(ob)])
+  d[is.na(d)] <- 0
+  d <- reshape2::melt(d, varnames=c("transcript","miRNA"), value.name="predicted")
+  d$observed <- reshape2::melt(as.matrix(ob))[,"value"]
+  d
+}
+
+
+#ms: use this one!!
+costCor <- function(params){
+  d <- getComparisonTable(params, ob, ags = ags)
+  m <- (sapply(split(d, d$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2))
+  sum(m)+median(m)+min(m)
+}
+```
+
+
+# Startig ag-values
+```{r}
+# starting values:
+# get the previous predictions for the optimal parameters:
+op_0 <- readRDS("../ag_HELA/opt_ags_us_r2_hela.rds")
+op_0_orig <- op_0$par
+ags <- op_0_orig[c("cel-lsy-6","hsa-miR-1-3p","hsa-miR-124-3p","hsa-miR-155-5p","hsa-miR-7-5p")]
+```
+
+
+
+
+## Data for the p3-score fitting
+```{r}
+m <- readRDS("../hsa.12mirs.HELA.fullScan.rds")
+# prepare length data
+ll <- as.data.frame(metadata(m)$length.info)
+ll$transcript <- row.names(ll)
+# prepare m
+m$transcript <- as.factor(seqnames(m))
+m <- split(mcols(m), m$miRNA)
+m <- m[c("cel-lsy-6","hsa-miR-1-3p","hsa-miR-124-3p","hsa-miR-155-5p","hsa-miR-7-5p"),]
+
+ob <- read.delim("/mnt/schratt/miRNA_KD/EnrichMir_Work/Aggregate_fg/bartel_data/GSE140217_HeLa_transfection_logtpm_batchnormalized.txt", row.names=1)
+ob <- ob[,which(names(ob) %in% c("lsy6","mir1","mir124","mir155","mir7"))]
+ob <- domnorm(ob)
+colnames(ob) <- names(m) # unsafe - they just happen to match
+```
+
+
+# ags_orig Fitting
+```{r}
+op_orig0 <- optim(par=c(ags = ags), fn=costCor, control=list(fnscale=-1))
+op_orig0$par
+#saveRDS(op_orig0,"orig.rds")
+```
+
+
+## Fit a single ag over original hela
+```{r}
+op_orig_glob <- optim(par=c(ag = -5), fn=costCor, control=list(fnscale=-1), method = "BFGS")
+op_orig_glob$par
+saveRDS(op_orig_glob,"opt_global_ag_orig_hela.rds")
+op_orig_glob <- readRDS("opt_global_ag_orig_hela.rds")
+```
+
+
+
+# Get ags for 3p-fitting
+```{r}
+#op <- readRDS("orig.rds")
+op <- op_orig0
+ags <- op$par
+```
+
+
+
+# p3 Fitting with opt. ags
+```{r}
+op_orig <- optim(par=c(p3 = 0.1,ags), fn=costCor, control=list(fnscale=-1))
+op_orig$par
+saveRDS(op_orig,"orig_p3.rds")
+```
+
+
+## Fit a single ag & p3 over original hela
+```{r}
+# op_orig_glob_p3 <- optim(par=c(p3 = 0.1,ag = -5), fn=costCor, control=list(fnscale=-1), method = "BFGS")
+# op_orig_glob_p3$par
+# saveRDS(op_orig_glob_p3,"opt_global_ag_p3_orig_hela.rds")
+```
+
+
+
+
+## Checking it out
+```{r}
+#op_orig <- readRDS("orig_p3.rds")
+d <- getComparisonTable(op_orig$par, ob)
+# get the per-miRNA correlations:
+cors <- sapply(split(d, d$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+ggplot(data.frame(miRNA=names(cors), r2=cors), aes(miRNA, r2)) + geom_col() + coord_flip() + geom_text(aes(label=round(cors,4)))
+# plot:
+LSD::heatscatter(d$predicted, d$observed,xlim = c(-1.5,1.5), ylim = c(-1.5,1.5))
+ggplot(d,aes(x = predicted, y = observed)) + geom_point(alpha = 0.5) + xlim(-1.5,1.5) + ylim (-1.5,1.5)
+```
+
+
+
+
+
+# Compare the values
+```{r}
+# # Biochem
+# d2 <- getComparisonTable(params=c(),ob, ags = ags)
+# cors2 <- sapply(split(d2, d2$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+# 
+# # glob ag
+# d3 <- getComparisonTable(op_orig_glob$par,ob)
+# cors3 <- sapply(split(d3, d3$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+# 
+# # glob_ag + p3
+# d4 <- getComparisonTable(op_orig_glob_p3$par,ob)
+# cors4 <- sapply(split(d4, d4$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+# 
+# 
+# # get the df
+# df1 <- data.frame(miRNA=names(cors), r2=cors)
+# df1$type <- "opt + p3"
+# 
+# df2 <- data.frame(miRNA=names(cors2), r2=cors2)
+# df2$type <- "scanMiR opt. ag"
+# 
+# df3 <- data.frame(miRNA=names(cors3), r2=cors3)
+# df3$type <- "scanMiR global ag"
+# 
+# df4 <- data.frame(miRNA=names(cors4), r2=cors4)
+# df4$type <- "glob_ag + p3"
+# 
+# df <- rbind(df1,df2,df3,df4)
+# saveRDS(df,"df_p3.rds")
+# 
+# df <- df2
+# 
+# ggplot(df, aes(miRNA, r2, fill = type)) + 
+#   geom_col(position="dodge") +
+#   theme_bw() + 
+#   scale_fill_nejm(alpha = 0.8)
+# 
+# ggsave("Hela_orig_Bar_ag.png")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

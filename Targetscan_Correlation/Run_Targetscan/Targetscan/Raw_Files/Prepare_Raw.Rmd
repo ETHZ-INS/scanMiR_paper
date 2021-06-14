@@ -1,0 +1,62 @@
+---
+title: "Download_Raw"
+author: "Michael Soutschek"
+date: "23 2 2021"
+output: html_document
+---
+
+
+```{r}
+library(data.table)
+```
+
+
+
+Download Human UTR Sequenes
+```{r}
+# download files
+tmp <- tempfile()
+download.file("http://www.targetscan.org/vert_72/vert_72_data_download/UTR_Sequences.txt.zip", tmp)
+system2("unzip", args = c("-o",tmp), stdout = "UTR_Sequences.txt")
+unlink(tmp)
+```
+
+
+Download Human ORF Sequenes
+```{r}
+# download files
+tmp <- tempfile()
+download.file("http://www.targetscan.org/vert_72/vert_72_data_download/ORF_Sequences.txt.zip", tmp)
+system2("unzip", args = c("-o",tmp), stdout = "ORF_Sequences.txt")
+unlink(tmp)
+```
+
+
+
+
+# Download miR families
+```{r}
+tmp <- tempfile()
+download.file("http://www.targetscan.org/vert_72/vert_72_data_download/miR_Family_Info.txt.zip", tmp)
+miRFam <- read.delim(unzip(tmp), header=TRUE)
+unlink(tmp)
+miRFam_fil <- miRFam[,1:3]
+write.table(miRFam_fil,"human_miR_families_all.csv",sep = "\t",quote = FALSE,row.names = FALSE,col.names = FALSE)
+```
+
+
+
+
+
+
+
+Download Mouse UTR Sequenes
+```{r}
+# download files
+tmp <- tempfile()
+download.file("http://www.targetscan.org/mmu_72/mmu_72_data_download/UTR_Sequences.txt.zip", tmp)
+system2("unzip", args = c("-o",tmp), stdout = "mUTR_Sequences.txt")
+unlink(tmp)
+```
+
+
