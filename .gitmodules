@@ -1,0 +1,3 @@
+[submodule "Parameter_Optimization/Run_McGeary_Scripts/miRNA_models-master"]
+	path = Parameter_Optimization/Run_McGeary_Scripts/miRNA_models-master
+	url = https://github.com/kslin/miRNA_models
