@@ -17,6 +17,7 @@ suppressPackageStartupMessages({
   library(BSgenome.Hsapiens.UCSC.hg19)
   library(ggsci)
   library(scanMiR)
+  library(ggplot2)
 })
 ```
 
@@ -64,12 +65,12 @@ domnorm <- function(x, useMedian=FALSE){
 
 # aggregate all miRNAs using the given parameters
 aggAll <- function(m,ll, params=c(), ags=NULL){
-  bp <- c(b=0.5735, c=-1.7091, p3=0, bg = 0, coef_utr = 0, coef_orf = 0)
+  bp <- c(b=0.5735, c=0.1810, p3=0, coef_utr = 0, coef_orf = 0)
   bp <- c(bp,ags)
   bp[names(params)] <- as.numeric(params)
   res <- bplapply(setNames(names(m),names(m)), BPPARAM=MulticoreParam(length(m)), FUN=function(x){
     if(!("ag" %in% names(bp)) && !is.null(bp[[x]])) bp[["ag"]] <- bp[[x]]
-    x <- .aggregate_miRNA(m[[x]],ll = ll, ag=bp[["ag"]], b=bp[["b"]], c=bp[["c"]], p3=bp[["p3"]], coef_utr=bp[["coef_utr"]],coef_orf = bp[["coef_orf"]], toInt = FALSE)
+    x <- aggregateMatches(m[[x]], a=bp[["ag"]], b=bp[["b"]], c=bp[["c"]], p3=bp[["p3"]], coef_utr=bp[["coef_utr"]],coef_orf = bp[["coef_orf"]], toInt = FALSE, keepSiteInfo = FALSE)
     y <- x$repression
     names(y) <- x$transcript
     y
@@ -82,7 +83,7 @@ aggAll <- function(m,ll, params=c(), ags=NULL){
 }
 
 getComparisonTable <- function(params=c(), ob, ags=NULL){
-  bp <- c(b=0.5735, c=-1.7091, p3=0, bg = 0, coef_utr = 0, coef_orf = 0)
+  bp <- c(b=0.5735, c=0.1810, p3=0, bg = 0, coef_utr = 0, coef_orf = 0)
   bp[names(params)] <- as.numeric(params)
   d <- aggAll(m,ll, bp, ags = ags)
   colnames(ob) <- gsub("-",".",colnames(ob))
@@ -108,8 +109,10 @@ costCor <- function(params){
 # starting values:
 # get the previous predictions for the optimal parameters:
 op_0 <- readRDS("../ag_HELA/opt_ags_us_r2_hela.rds")
+#These parameters here were still fit as logarithmic values
 op_0_orig <- op_0$par
 ags <- op_0_orig[c("cel-lsy-6","hsa-miR-1-3p","hsa-miR-124-3p","hsa-miR-155-5p","hsa-miR-7-5p")]
+ags <- exp(ags)
 ```
 
 
@@ -117,10 +120,7 @@ ags <- op_0_orig[c("cel-lsy-6","hsa-miR-1-3p","hsa-miR-124-3p","hsa-miR-155-5p",
 
 ## Data for the p3-score fitting
 ```{r}
-m <- readRDS("../hsa.12mirs.HELA.fullScan.rds")
-# prepare length data
-ll <- as.data.frame(metadata(m)$length.info)
-ll$transcript <- row.names(ll)
+m <- readRDS("../data/hsa.12mirs.HELA.fullScan.GR.rds")
 # prepare m
 m$transcript <- as.factor(seqnames(m))
 m <- split(mcols(m), m$miRNA)
@@ -133,29 +133,29 @@ colnames(ob) <- names(m) # unsafe - they just happen to match
 ```
 
 
-# ags_orig Fitting
+# ags_orig Fitting for only the RBNS mirs
 ```{r}
-op_orig0 <- optim(par=c(ags = ags), fn=costCor, control=list(fnscale=-1))
-op_orig0$par
-#saveRDS(op_orig0,"orig.rds")
+op_0_orig_rbns <- optim(par=c(ags = ags), fn=costCor, control=list(fnscale=-1))
+op_0_orig_rbns$par
+saveRDS(op_0_orig_rbns,"orig_rbns.rds")
 ```
 
 
 ## Fit a single ag over original hela
 ```{r}
-op_orig_glob <- optim(par=c(ag = -5), fn=costCor, control=list(fnscale=-1), method = "BFGS")
-op_orig_glob$par
-saveRDS(op_orig_glob,"opt_global_ag_orig_hela.rds")
-op_orig_glob <- readRDS("opt_global_ag_orig_hela.rds")
+# op_orig_glob <- optim(par=c(ag = -5), fn=costCor, control=list(fnscale=-1), method = "BFGS")
+# op_orig_glob$par
+# saveRDS(op_orig_glob,"opt_global_ag_orig_hela.rds")
+# op_orig_glob <- readRDS("opt_global_ag_orig_hela.rds")
 ```
 
 
 
 # Get ags for 3p-fitting
 ```{r}
-#op <- readRDS("orig.rds")
-op <- op_orig0
+op <- readRDS("orig_rbns.rds")
 ags <- op$par
+names(ags) <- gsub("ags.","",names(ags))
 ```
 
 

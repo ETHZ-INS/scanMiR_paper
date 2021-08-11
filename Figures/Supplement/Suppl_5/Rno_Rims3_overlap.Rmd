@@ -7,8 +7,9 @@ output: html_document
 
 
 ```{r}
-devtools::load_all("~/scanMir/")
 suppressPackageStartupMessages({
+  library(scanMiR)
+  library(scanMiRApp)
   library(scanMiRData)
   library(ensembldb)
   library(AnnotationHub)

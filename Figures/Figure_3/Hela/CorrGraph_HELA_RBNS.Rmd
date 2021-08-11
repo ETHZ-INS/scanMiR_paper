@@ -16,14 +16,9 @@ suppressPackageStartupMessages({
   library(ggsci)
   library(data.table)
   library(viridis)
+  library(scanMiR)
 })
 ```
-
-
-```{r}
-source("~/scanMir/R/aggregation.R")
-```
-
 
 
 ```{r fns}
@@ -39,6 +34,55 @@ domnorm <- function(x, useMedian=FALSE){
   x
 }
 
+.aggregate_miRNA <- function(m, ll = NULL, a=-4.863126, b=0.5735, c=0.1810,
+                             p3=0.051, coef_utr = -0.17106,
+                             coef_orf = -0.21546, p3.range=c(3L,8L),
+                             toInt=FALSE){
+  m <- as.data.table(m)
+  for(col in c("ORF", "p3.score", "type")) if(is.null(m[[col]])) m[[col]] <- 0L
+  m[, ORF:=as.integer(ORF)]
+  m[, log_kd:=-log_kd/1000]
+  m <- m[log_kd>0]
+  m$p3.score <- ifelse(m$type == "non-canonical" , 0L, m$p3.score)
+  m$p3.score[m$p3.score>max(p3.range)] <- as.integer(max(p3.range))
+  m$p3.score[m$p3.score<min(p3.range)] <- 0L
+  m$N <- 1 / (1 + exp(-1 * (a + m$log_kd + log(c)*m$ORF + p3*m$p3.score) ))
+  m$log_kd <- NULL
+  m$N_bg <- 1 / (1 + exp(-1 * (a  + log(c)*m$ORF) ))
+  m <- as.data.frame(rowsum(as.matrix(m[,c("N","N_bg")]), group=m$transcript))
+  m <- data.frame( transcript=as.factor(row.names(m)),
+                   repression=log2(1+exp(b)*m$N_bg) - log2(1 + exp(b)*m$N))
+  if(!is.null(ll) && nrow(m) > 1){
+    m <- merge(m,ll,by = "transcript", all.x = TRUE)
+
+    # get the utr score
+    m$utr.length <- log10(m$utr.length)
+    m$utr.length[is.infinite(m$utr.length) | is.na(m$utr.length)] <- 0
+    qu_un <- m[!duplicated(m$transcript),"utr.length"]
+    qu <- quantile(qu_un, probs = c(0.05,0.95), na.rm = TRUE)
+    m$utr_score <- (m$utr.length - qu[1]) / (qu[2] - qu[1])
+    m$utr_score[is.na(m$utr_score)] <- 0
+
+    # get the orf score
+    if(sum(m$orf.length, na.rm = TRUE) > 0){
+      m$orf.length <- log10(m$orf.length)
+      m$orf.length[is.infinite(m$orf.length) | is.na(m$orf.length)] <- 0
+      qu_un <- m[!duplicated(m$transcript),"orf.length"]
+      qu <- quantile(qu_un, probs = c(0.05,0.95), na.rm = TRUE)
+      m$orf_score <- (m$orf.length - qu[1]) / (qu[2] - qu[1])
+      m$orf_score[is.na(m$orf_score)] <- 0
+    }else{
+      m$orf_score <- 0
+    }
+  m$repression <- m$repression + coef_utr*m$utr_score*m$repression +
+    coef_orf*m$orf_score*m$repression
+  m <- subset(m, select = - c(orf.length,utr.length,utr_score,orf_score))
+  }
+  if(toInt) m$repression <- as.integer(round(1000*m$repression))
+  m$repression <- ifelse(m$repression >= 0, 0, m$repression)
+  m
+}
+
 # aggregate all miRNAs using the given parameters
 aggAll <- function(m, params=c(), ags=NULL){
   bp <- c(b=0.5735, c=-1.7091, p3=0)
@@ -46,7 +90,7 @@ aggAll <- function(m, params=c(), ags=NULL){
   bp[names(params)] <- as.numeric(params)
   res <- bplapply(setNames(names(m),names(m)), BPPARAM=MulticoreParam(length(m)), FUN=function(x){
     if(!("ag" %in% names(bp)) && !is.null(bp[[x]])) bp[["ag"]] <- bp[[x]]
-    x <- .aggregate_miRNA(m[[x]], ag=bp[["ag"]], b=bp[["b"]], c=bp[["c"]], p3=bp[["p3"]],toInt = FALSE)
+    x <- .aggregate_miRNA(m[[x]], a=bp[["ag"]], b=bp[["b"]], c=bp[["c"]], p3=bp[["p3"]],toInt = FALSE)
     y <- x$repression
     names(y) <- x$transcript
     y
@@ -153,8 +197,8 @@ colnames(ob) <- names(m)
 # McGeary
 ```{r}
 # Get the Feature Files
-feature_files <- list.files("../../../Parameter_Optimization/data/McGeary_2019_processed/HELA_Features_McGeary_Scan", full.names = T)
-mirs_full <- gsub("\\.txt", "", list.files("../../../Parameter_Optimization/data/McGeary_2019_processed/HELA_Features_McGeary_Scan", full.names = F))
+feature_files <- list.files("/mnt/schratt/scanMiR_paper_scripts/Parameter_Optimization/data/McGeary_2019_processed/HELA_Features_McGeary_Scan", full.names = T)
+mirs_full <- gsub("\\.txt", "", list.files("/mnt/schratt/scanMiR_paper_scripts/Parameter_Optimization/data/McGeary_2019_processed/HELA_Features_McGeary_Scan", full.names = F))
 names(feature_files) <- mirs_full
 hela_mirs <- mirs_full[!grepl("pass", mirs_full)]
 hela_mirs <- hela_mirs[hela_mirs %in% c("cel-lsy-6","hsa-miR-1","hsa-miR-124-3p","hsa-miR-155-5p","hsa-miR-7-5p")]

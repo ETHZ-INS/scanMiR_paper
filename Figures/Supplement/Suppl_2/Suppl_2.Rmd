@@ -1,0 +1,125 @@
+---
+title: "Suppl1"
+author: "Michael Soutschek"
+date: "3/29/2021"
+output: html_document
+---
+
+
+```{r, include=FALSE}
+if(!exists('FIG_NB')){
+  FIG_NB <- 0; FIG_STRING <- "Supplementary Figure S"
+  getFigNb <- function(increment=FALSE){
+    if(increment) FIG_NB <<- FIG_NB + 1
+    paste0(FIG_STRING,FIG_NB)
+  }
+}
+knitr::opts_chunk$set(fig.width=8)
+```
+
+# `r getFigNb(TRUE)`
+
+
+
+```{r, include=FALSE}
+suppressPackageStartupMessages({
+  library(ggplot2)
+  library(cowplot)
+})
+source("../../misc.R")
+```
+
+
+```{r, include=FALSE}
+
+df1 <- readRDS("mir124_hela_cor_df.rds")
+
+p1 <- ggplot(df1, aes(x = ag, y = r2)) + 
+  geom_line(size = 1) +
+  geom_vline(xintercept = -4.863126, linetype = "dashed", color = "grey42") + 
+  theme_bw() +
+  ylab(expression(~r^2)) +
+  ggtitle("HELA: mir124") + 
+  theme_classic() + 
+  xlab("log(a)")
+
+
+df2 <- readRDS("mir138_hela_cor_df.rds")
+df_T <- readRDS("../../../Targetscan_Correlation/Run_Targetscan/Targetscan_corr_hek.rds")
+df_T <- df_T[,c(3,1,2)]
+colnames(df_T) <- c("miRNA","r2","type")
+tar_138 <- df_T[df_T$miRNA == "miR.138.5p","r2"]
+
+
+p2 <- ggplot(df2, aes(x = ag, y = r2)) + 
+  geom_line(size = 1) +
+  theme_bw() +
+  geom_hline(aes(yintercept = tar_138, color = "TargetScan")) +
+  scale_color_manual(values = "#7CAE00") +
+  geom_vline(xintercept = -4.863126, linetype = "dashed", color = "grey42") + 
+  ylab(expression(~r^2)) +
+  ggtitle("HEK: mir138") + 
+  ylim(0,0.25) + 
+  theme_classic() + 
+  xlab("log(a)") + 
+  theme(legend.title = element_blank())
+  
+
+
+# HeLa bargraph
+
+df3 <- readRDS("./Hela/BarGraph_DF_Hela.rds")
+df3$type <- as.character(df3$type)
+df3[1:16,"type"] <- "scanMiR opt. a"
+df3[17:32,"type"] <- "McGeary opt. a"
+df3$type <- as.factor(df3$type)
+
+p3 <- ggplot(df3, aes(miRNA, r2, fill = type)) + 
+  geom_col(position="dodge") +
+  scale_fill_manual(values = meth_cols2[levels(df3$type)]) + 
+  facet_grid(~ KDs, scales = "free_x", space = "free_x") + 
+  theme_classic() + 
+  theme(
+    panel.border =element_rect(color="black", fill=NA),
+    text = element_text(size=12),
+    legend.title = element_text(size = rel(0.9)),
+    legend.text = element_text(size = rel(0.8)),
+    strip.text.x = element_text(size=12),
+    axis.title.x=element_blank(),
+    axis.text.x =element_text(angle=45, hjust=1)
+  ) +
+  labs(fill = "Method")
+```
+
+
+```{r, include=FALSE}
+# df4 <- readRDS("BarGraph_Pass.rds")
+# 
+# p4 <- ggplot(df4[df4$type != "Targetscan",], aes(miRNA, r2, fill = type)) + 
+#   geom_col(position="dodge") +
+#   scale_fill_manual(values = meth_cols2) + 
+#   theme_classic() + 
+#   theme(
+#                 panel.border =element_rect(color="black", fill=NA),
+#                 text = element_text(size=12),
+#                 legend.title = element_text(size = rel(0.9)),
+#                 legend.text = element_text(size = rel(0.8)),
+#                 axis.title.x=element_blank()
+#   ) +
+#   labs(fill = "Method")
+```
+
+
+
+```{r, fig.width=8, fig.height=6}
+pp1 <- plot_grid(p1,p2,labels = "AUTO",rel_widths = c(1.5,2))
+#pp <- plot_grid(pp1,p3,p4,labels = c("","C","D"), ncol = 1,rel_heights = c(1,1.3,1.3))
+pp <- plot_grid(pp1,p3,labels = c("","C"), ncol = 1,rel_heights = c(1,1.3))
+pp
+
+#ggsave("Suppl1.png",plot = pp, width = 10,height = 7)
+```
+
+### `r getFigNb()`
+
+**Pearson correlations of scanMiR repression predictions to measured changes in HeLa cells. A-B:** Deviations of *a* from the optimal value still lead to high correlations of scanMiR repression predictions with measured mRNA logFC in cells upon miRNA mimic transfections, outperforming TargetScan predictions over several orders of magnitudes (**B**). **C:** The correlations of predicted repression to observed foldchange upon miRNA-mimic transfection obtained with scanMiR is comparable to those obtained from the original CNN-values from McGeary et al. (2019). miRNAs used in RBNS experiments are displayed on the right side.

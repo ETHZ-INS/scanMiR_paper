@@ -1,0 +1,124 @@
+---
+title: "Suppl. 2"
+author: "Michael Soutschek"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+```{r, include=FALSE}
+if(!exists('FIG_NB')){
+  FIG_NB <- 0
+  getFigNb <- function(increment=FALSE){
+    if(increment) FIG_NB <<- FIG_NB + 1
+    FIG_NB
+  }
+}
+knitr::opts_chunk$set(fig.width=8)
+```
+
+# Fig `r getFigNb(TRUE)`
+
+
+
+```{r, include=FALSE}
+suppressPackageStartupMessages({
+  library(ggplot2)
+  library(cowplot)
+  library(gridExtra)
+  library(scales)
+  library(GenomicRanges)
+  library(S4Vectors)
+})
+source("../../misc.R")
+```
+
+
+```{r, include=FALSE}
+# Cut off Corr
+
+df1 <- readRDS("./cut_off_corr/PlotDF.rds")
+
+p1 <- ggplot(df1, aes(x = cut_off, y = r2)) + 
+  geom_line(size = 1) +
+  theme_minimal() +
+  ylab(expression(~r^2)) +
+  xlab(bquote(~log(K[D])~"cut-off")) +
+  facet_grid(~mir) +
+  theme(
+                panel.border =element_rect(color="black", fill=NA),
+                text = element_text(size=12),
+                legend.title = element_text(size = rel(0.9)),
+                legend.text = element_text(size = rel(0.8))
+  )
+
+
+# Table
+
+df2 <- readRDS("./cut_off_corr/Plot_Table_cut_df.rds")
+p2 <- tableGrob(df2, rows = NULL, theme=ttheme_default(base_size=10))
+
+# Pie Chart
+
+m <- readRDS(file = "../../../Parameter_Optimization/data/hsa.12mirs.HEK.fullScan.GR.rds")
+
+e <- as.data.frame(mcols(m))
+e$transcript <- as.factor(seqnames(m))
+
+cut_off <- nrow(e[e$log_kd > -300,])/nrow(e)
+rest <- 1 - nrow(e[e$log_kd > -300,])/nrow(e)
+
+df <- data.frame("cut" = cut_off , "rest" = rest)
+df <- data.frame(t(df))
+df$group <- c("Cut-off at -0.3","All other sites")
+
+
+blank_theme <- theme_minimal()+
+  theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  panel.border = element_blank(),
+  panel.grid=element_blank(),
+  axis.ticks = element_blank(),
+  plot.title=element_text(size=14, face="bold"),
+  legend.title = element_blank(),
+  plot.margin = unit(c(0,2,0,1), "lines")
+  )
+
+pie <- ggplot(df, aes(x="", y=t.df., fill=group))+
+  geom_bar(width = 1, stat = "identity") + 
+  coord_polar("y", start=0) + 
+  scale_fill_manual(values = c("#4477AA","#CC6677")) +
+  blank_theme 
+
+pie <- pie + theme(axis.text.x=element_blank(), legend.position = "bottom") + 
+  geom_text(aes(y = t.df./2 + c(0, cumsum(t.df.)[-length(t.df.)]), 
+                label = percent(t.df./100)), size=5)
+
+
+#Speed Figure
+
+df4 <- readRDS("../../../Speed_Comparison/Speed_DF2.rds")
+
+p4 <- ggplot(df4,aes(x = Sequences, y = time, color = Algorithm)) + 
+  geom_line(aes(linetype = Condition)) + scale_x_log10() + 
+  ylab("Time (s)") + theme_classic() + scale_color_manual(values = meth_cols2, guide="none") + 
+  theme(plot.margin = unit(c(2,0.5,0,0), "lines"), legend.position = "bottom", legend.direction = "vertical")
+```
+
+
+
+
+```{r, fig.width=9, fig.height=7}
+pp1 <- plot_grid(p2,pie,p4, labels = c("B","C","D"), nrow = 1, rel_widths=c(5,4,4))
+plot_grid(p1,pp1,labels = c("A",""), ncol = 1, rel_heights = c(4,5))
+#ggsave("Suppl_4.png",bg = "white",width = 9)
+```
+
+
+
+### `r getFigNb()`
+
+**Computational optimizations in scanMiR. A:** Pearson correlation values of predicted and measured miRNA repression depending on different maximal $K_d$-values (“cutoff”). **B:** The maximum $log(K_d)$ cutoff for the 12 miRNAs used in HEK-transfection experiments (McGeary et al., 2019)  by which the correlation diminishes by only 2.5% or 1%, respectively. For individual miRNAs, there were large variations in the cutoff beyond which the addition of binding sites with a lower affinity did not substantially improve the correlation between predicted and observed repression. **C:** Applying a $log(K_d)$ cutoff of -0.3 reduces the number of binding sites by 39%, as shown for the scans of the aforementioned 12 miRNAs on HEK-cell transcripts. **D:** Run times of the scanning algorithm of McGeary et al. (2019) with and without folding of the transcripts.

@@ -22,12 +22,6 @@ suppressPackageStartupMessages({
 
 
 
-```{r}
-source("~/scanMir/R/aggregation.R")
-```
-
-
-
 ```{r fns}
 domnorm <- function(x, useMedian=FALSE){
   y <- setNames(seq_len(ncol(x)), colnames(x))

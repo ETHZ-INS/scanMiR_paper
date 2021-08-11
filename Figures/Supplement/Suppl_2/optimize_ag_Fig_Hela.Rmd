@@ -18,12 +18,8 @@ suppressPackageStartupMessages({
   library(data.table)
   library(ggplot2)
   library(tidyverse)
+  library(scanMiR)
 })
-```
-
-
-```{r}
-source("~/scanMir/R/aggregation.R")
 ```
 
 
@@ -45,7 +41,7 @@ domnorm <- function(x, useMedian=TRUE){
 
 
 getPreds <- function(ag=ag, m=m, normalize=TRUE, useMedian = FALSE){
-  m_agg <- aggregateSites(m = m, ag = ag)
+  m_agg <- aggregateMatches(m = m, a = exp(ag))
   m_repr <- pivot_wider(m_agg,id_cols = transcript, names_from = miRNA, values_from = repression, values_fill = list(repression = 0))
   m_repr <- column_to_rownames(m_repr, var = "transcript")
   if(normalize) m_repr <- domnorm(m_repr, useMedian = useMedian)

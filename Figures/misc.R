@@ -10,15 +10,16 @@ light <- "#DDCC77"
 pink <- "#CC6677"
 violet <- "#AA4499"
 
-type_cols <- c("8mer" = "darkred","7mer-m8" = turquoise,"7mer-a1" = darkgreen,
-               "6mer" = lightgreen,"6mer-m8" = lightgreen, "6mer-a1" = lightgreen,
-               "g-bulged 8mer" = "grey55", "g-bulged 7mer" = "grey55",
-               "g-bulged 6mer" = lightblue, "wobbled 7mer" = lightblue,
-               "non-canonical" = "grey55", "+A" = "darkred", "7mer" = darkgreen )
+type_cols <- c("8mer" = "darkred","7mer-m8" = "#0596b0","7mer-a1" = "#117733",
+               "6mer" = "#4CAF50","6mer-m8" = "#4CAF50", "6mer-a1" = "#4CAF50",
+               "g-bulged 8mer" = "#88CCEE", "g-bulged 7mer" = "#88CCEE",
+               "g-bulged 6mer" = "#88CCEE", "wobbled 7mer" = "grey85", "wobbled 8mer" = "grey75",
+               "non-canonical" = "grey55", "+A" = "darkred", "7mer" = "#117733" )
+
 
 
 meth_cols2 <- c(`McGeary Lin` = darkblue, `McGeary opt. a` = darkblue, 
                 scanMiR = darkgreen, "scanMiR opt. a" = darkgreen, 
-                "scanMiR Global ag"= lightgreen, Targetscan = "grey55", 
+                "scanMiR Global ag"= lightgreen, TargetScan = "grey55", 
                 other = light,'McGeary opt. a + pass.' = brown)
 

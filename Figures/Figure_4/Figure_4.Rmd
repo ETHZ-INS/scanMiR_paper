@@ -1,5 +1,5 @@
 ---
-title: "Figure_3"
+title: "Figure 4: special sites"
 author: "Michael Soutschek"
 date: "4 3 2021"
 output: html_document
@@ -22,6 +22,7 @@ suppressPackageStartupMessages({
 #colors
 ```{r}
 source("../misc.R")
+alcex <- 0.75
 ```
 
 
@@ -41,13 +42,16 @@ Hoxb8_df$type <- factor(Hoxb8_df$type, grep("bulged",levels(Hoxb8_df$type),inver
 levels(Hoxb8_df$type) <- gsub("6mer-m8|6mer-a1","6mer",levels(Hoxb8_df$type))
 levels(Hoxb8_df$type) <- gsub("wobbled 8mer|wobbled 7mer","non-canonical",levels(Hoxb8_df$type))
 
+type_cols1 <- type_cols[levels(Hoxb8_df$type)]
+
 p3 <- ggplot(Hoxb8_df, aes(x = start, y = -`logKd`)) + 
         geom_hline(yintercept=1, linetype="dashed", color = darkblue, size=1) + 
         geom_point(size=2,  aes(color = type,shape = miRNA), shape = 15) + 
         geom_point(data=Hoxb8_df[Hoxb8_df$info!="",], shape=1, size=5) +
-        scale_color_manual(values = type_cols, drop=FALSE) + 
+        scale_color_manual(values = type_cols1, drop=FALSE) + 
         geom_text_repel(label = Hoxb8_df$info, nudge_y = 0.5, nudge_x=0, min.segment.length = 0) +
-        ggtitle("Hoxb8 - miR-196a-5p") + xlab("3'UTR Sequence") + theme_light() +
+        ggtitle("Hoxb8 - miR-196a-5p") + xlab("3'UTR Sequence") + ylab(bquote("-"*logK[D])) + 
+        theme_light() +
         xlim(1,856) + ylim(1,6.5) +
         theme(
           panel.border =element_rect(color="black", fill=NA),
@@ -62,7 +66,7 @@ p3
 ```{r}
 mods_196 <- mods[["hsa-miR-196a-5p"]]
 
-p4 <- as_grob(~viewTargetAlignment(Hoxb8[1],mods_196,flagBulgeMatches = TRUE,maxBulgeSize=0,outputType = "plot", cex=0.75))
+p4 <- as_grob(~viewTargetAlignment(Hoxb8[1],mods_196,flagBulgeMatches = TRUE,outputType = "plot", cex=alcex))
 ```
 
 
@@ -76,24 +80,30 @@ CDR1_df$miRNA <- relevel(CDR1_df$miRNA, "hsa-miR-7-5p")
 CDR1_df$type <- factor(CDR1_df$type, grep("bulged",levels(CDR1_df$type),invert=TRUE,value=TRUE))
 levels(CDR1_df$type) <- gsub("6mer-m8|6mer-a1","6mer",levels(CDR1_df$type))
 levels(CDR1_df$type) <- gsub("wobbled 8mer|wobbled 7mer","non-canonical",levels(CDR1_df$type))
+CDR1_df$type <- factor(as.character(CDR1_df$type),levels = c("8mer","7mer-m8","7mer-a1","6mer","non-canonical"))
 
-legend_df <- data.frame(matrix(ncol = 16, nrow = 0))
-colnames(legend_df) <- colnames(CDR1_df)
-legend_df[1,"miRNA"] <- "hsa-miR-196a-5p"
-legend_df[1,"type"] <- "non-canonical"
-CDR1_df <- rbind(CDR1_df,legend_df)
-CDR1_df$miRNA <- factor(as.character(CDR1_df$miRNA), levels = c("hsa-miR-196a-5p","hsa-miR-671-5p","hsa-miR-7-5p"))
+# legend_df <- data.frame(matrix(ncol = 16, nrow = 0))
+# colnames(legend_df) <- colnames(CDR1_df)
+# legend_df[1,"miRNA"] <- "hsa-miR-196a-5p"
+# legend_df[2,"miRNA"] <- "hsa-miR-29b-3p"
+# legend_df[1:2,"type"] <- "non-canonical"
+# CDR1_df <- rbind(CDR1_df,legend_df)
+# CDR1_df$miRNA <- factor(as.character(CDR1_df$miRNA), levels = c("hsa-miR-196a-5p","hsa-miR-671-5p","hsa-miR-7-5p","hsa-miR-29b-3p"))
 
+CDR1_df$miRNA <- factor(as.character(CDR1_df$miRNA), levels = c("hsa-miR-671-5p","hsa-miR-7-5p"))
 
+type_cols1 <- type_cols[levels(CDR1_df$type)]
 
 p5 <- ggplot(CDR1_df, aes(x = start, y = -`logKd`)) + 
         geom_hline(yintercept=1, linetype="dashed", color = darkblue, size=1) + 
         geom_point(size=2,  aes(color = type, shape = miRNA)) +
-        scale_shape_manual(values=c(15, 17, 16))+
+        # scale_shape_manual(values=c(15, 17, 16, 18)) +
+        scale_shape_manual(values=c(17, 16)) +
         geom_point(data=CDR1_df[CDR1_df$info!="",], shape=1, size=5) +
-        scale_color_manual(values = type_cols, drop=FALSE) + 
+        scale_color_manual(values = type_cols1, drop=FALSE) + 
         geom_text_repel(label = CDR1_df$info, nudge_y = -0.35, nudge_x=0, min.segment.length = 0) +
-        ggtitle("circular CDR1as") + xlab("Sequence") + theme_light() + ylim(1,6.5) +
+        ggtitle("circular CDR1as") + xlab("Sequence") + ylab(bquote("-"*logK[D])) + 
+        theme_light() + ylim(1,6.5) +
         theme(
           panel.border =element_rect(color="black", fill=NA),
           text = element_text(size=12),
@@ -108,7 +118,7 @@ p5
 ```{r}
 mods_671 <- mods[["hsa-miR-671-5p"]]
 
-p6 <- as_grob(~viewTargetAlignment(CDR1[76],mods_671,flagBulgeMatches = TRUE,maxBulgeSize=0,outputType = "plot", cex=0.75))
+p6 <- as_grob(~viewTargetAlignment(CDR1[76],mods_671,flagBulgeMatches = TRUE,outputType = "plot", cex=alcex))
 ```
 
 
@@ -119,17 +129,21 @@ Cyr_df <- as.data.frame(Cyr)
 Cyr_df$logKd <- Cyr_df$log_kd / 1000
 #Cyr_df$type <- ifelse(Cyr_df$type == "non-canonical","",as.character(Cyr_df$type))
 #Cyr_df$type <- ifelse(grepl("6mer",Cyr_df$type),"",as.character(Cyr_df$type))
-Cyr_df$TDMD2 <- ifelse(Cyr_df$note == "TDMD","TDMD","")
+Cyr_df$TDMD2 <- ifelse(Cyr_df$note == "TDMD?","TDMD?","")
 Cyr_df <- Cyr_df[Cyr_df$logKd < -1,]
 levels(Cyr_df$type) <- gsub("6mer-m8|6mer-a1","6mer",levels(Cyr_df$type))
+levels(Cyr_df$type) <- gsub("g-bulged 8mer|g-bulged 7mer|g-bulged 6mer","non-canonical",levels(Cyr_df$type))
+
+type_cols1 <- type_cols[levels(Cyr_df$type)]
 
 p7 <- ggplot(Cyr_df, aes(x = start, y = -`logKd`)) + 
         geom_hline(yintercept=1, linetype="dashed", color = darkblue, size=1) + 
         geom_point(size=2, aes(colour=type)) + geom_point(data=Cyr_df[Cyr_df$TDMD2!="",], shape=1, size=4) +
         geom_text_repel(label = Cyr_df$TDMD2, nudge_y = -0.5, min.segment.length = 0) +
-        scale_color_manual(values = type_cols) + 
+        scale_color_manual(values = type_cols1) + 
         #geom_text(label = Cyr_df$type,nudge_y = -0.4) +
-        ggtitle("Cyrano - miR-7-5p") + xlab("Sequence") + ylab("-logKd (>1)") +theme_light() + ylim(1,6.5) +
+        ggtitle("Cyrano - miR-7-5p") + xlab("Sequence") + ylab(bquote("-"*logK[D]~"(>1)")) +
+        theme_light() + ylim(1,6.5) +
         theme(
                 panel.border =element_rect(color="black", fill=NA),
                 text = element_text(size=12),
@@ -142,58 +156,127 @@ p7
 
 ```{r}
 mods_7 <- mods[["hsa-miR-7-5p"]]
-p8 <- as_grob(~viewTargetAlignment(Cyr[1],mods_7,flagBulgeMatches = TRUE, outputType = "plot", cex=0.75))
+p8 <- as_grob(~viewTargetAlignment(Cyr[1],mods_7,flagBulgeMatches = FALSE, outputType = "plot", cex=alcex))
 ```
+
+
+
+# Plot Nrep example
+```{r}
+Nrep <- readRDS("Nrep_29.rds")
+Nrep_df <- as.data.frame(Nrep)
+Nrep_df$logKd <- Nrep_df$log_kd / 1000
+Nrep_df$TDMD2 <- ifelse(Nrep_df$note == "TDMD?","TDMD?","")
+levels(Nrep_df$type) <- gsub("6mer-m8|6mer-a1","6mer",levels(Nrep_df$type))
+levels(Nrep_df$type) <- gsub("g-bulged 8mer|g-bulged 7mer|g-bulged 6mer","non-canonical",levels(Nrep_df$type))
+Nrep_df$type <- droplevels(Nrep_df$type)
+
+type_cols1 <- type_cols[levels(Nrep_df$type)]
+
+p9 <- ggplot(Nrep_df, aes(x = start, y = -`logKd`)) + 
+        geom_hline(yintercept=1, linetype="dashed", color = darkblue, size=1) + 
+        geom_point(size=3, aes(colour=type),shape = 18) + geom_point(data=Nrep_df[Nrep_df$TDMD2!="",], shape=1, size=4) +
+        geom_text_repel(label = Nrep_df$TDMD2, nudge_y = -0.5, min.segment.length = 0) +
+        scale_color_manual(values = type_cols1) + 
+        #geom_text(label = Cyr_df$type,nudge_y = -0.4) +
+        ggtitle("Nrep - miR-29b-3p") + xlab("Sequence") + ylab(bquote("-"*logK[D])) + 
+        theme_light() + ylim(1,6.5) +
+        theme(
+                panel.border =element_rect(color="black", fill=NA),
+                text = element_text(size=12),
+                legend.title = element_text(size = rel(0.9)),
+                legend.text = element_text(size = rel(0.8))
+              ) 
+p9
+```
+
+```{r}
+mods_29 <- mods[["hsa-miR-29b-3p"]]
+p10 <- as_grob(~viewTargetAlignment(Nrep[1],mods_29,flagBulgeMatches = FALSE, outputType = "plot", cex=alcex))
+```
+
 
 
 # Grid
-```{r, eval=TRUE}
+```{r}
+# Definitions
 legend <- get_legend(
   # create some space to the left of the legend
-  p5 + theme(legend.box.margin = margin(0, 12, 0, 0))
+  p5 + theme(legend.box.margin = margin(0, 0, 0, 0)) +
+    theme(legend.position = "bottom") + 
+    guides(colour=guide_legend(title.position = "top"),
+           shape=guide_legend(title.position = "top"))
 )
+bl <- ggplot() + theme_void()
 
-pp1 <- plot_grid(p3 + theme(legend.position = "none"),p4,
-                 nrow=2, rel_heights = c(6,2), labels = c("A","B")) + theme(plot.margin = unit(c(0,3,0,0), "lines"))
+# Alignments
+ppa <- plot_grid(bl,p6,bl,ncol = 3,labels = c("","B",""), rel_widths = c(1,5,1))
+ppa <- ppa + draw_text("miR-671-5p 'slicing?' site at nt 1301 of CDR1as", x = 0.25, y = 0.87, hjust = 0, fontface = "italic", size = 10.5) 
 
-pp2 <- plot_grid(p5 + theme(legend.position = "none"),p6,
-                 nrow=2, rel_heights = c(6,2), labels = c("C","D"))
+ppb <- plot_grid(bl,p4,bl,ncol = 3,labels = c("","E",""), rel_widths = c(1,5,1))
+ppb <- ppb + draw_text("miR-7-5p 'TDMD?' site at nt 2887 of Cyrano", x = 0.25, y = 0.87, hjust = 0, fontface = "italic", size = 10.5) 
 
-pp3 <- plot_grid(p7 + theme(legend.position = "none"),
-                 p8,nrow=2, rel_heights = c(6,2), labels = c("E","F")) + theme(plot.margin = unit(c(0,3,0,0), "lines"))
+ppc <- plot_grid(bl,p4,bl,ncol = 3,labels = c("","C",""), rel_widths = c(1,5,1))
+ppc <- ppc + draw_text("miR-196a-5p 'slicing?' site at nt 425 of HOXB8", x = 0.25, y = 0.87, hjust = 0, fontface = "italic", size = 10.5) 
 
-pp4 <- plot_grid(legend,ggplot() + theme_void(), rel_widths = c(1,3),labels = c("")) + 
-  theme(plot.margin = unit(c(0,0,3,0), "lines"))
+ppd <- plot_grid(bl,p10,bl,ncol = 3,labels = c("","F",""), rel_widths = c(1,5,1))
+ppd <- ppd + draw_text("miR-29b-3p 'TDMD?' site at nt 554 of NREP", x = 0.25, y = 0.87, hjust = 0, fontface = "italic", size = 10.5) 
 
-
-pp <- plot_grid(pp1,pp2,pp3,pp4,
-                ncol = 2, labels = c(""), scale = 0.95)
-
-ggsave("Figure_4.pdf",plot = pp, width = 10, height = 8)
-ggsave("Figure_4.png",plot = pp, width = 10, height = 8)
+pp2 <- plot_grid(ppa,ppb,ppc,ppd,ncol = 2)
 
 
-# gl1 <- list(p5,p6)
-# gr1 <- grid.arrange(
-#   grobs = gl1,
-#   widths = c(0.5, 3, 0.5),
-#   layout_matrix = rbind(c(NA, 1,NA),
-#                         c(2, 2, 2)),
+# Panels
+pp1.1 <- plot_grid(p5 +  theme(legend.position = "none"),
+                 p7 + theme(legend.position = "none"),
+                  ncol = 2, labels = c("A","D"))
+pp1 <- plot_grid(pp1.1,legend,ncol = 1, rel_heights = c(1,0.2)) + theme(plot.margin = unit(c(0,0,1.5,0), "lines"))
+
+# grid
+pp <- plot_grid(pp1,pp2,ncol = 1, rel_heights = c(1.6,1))
+```
+
+
+```{r, fig.width=8.5, fig.heigth=7}
+pp
+ggsave("Figure_4.pdf",plot = pp, width = 8.5, height = 7,  bg = "white")
+ggsave("Figure_4.png",plot = pp, width = 8.5, height = 7,  bg = "white")
+```
+
+# Grid
+```{r, eval=TRUE}
+# legend <- get_legend(
+#   # create some space to the left of the legend
+#   p5 + theme(legend.box.margin = margin(0, 8, 0, 0))
 # )
+# 
+# pp1 <- plot_grid(p3 + theme(legend.position = "none"),p4,
+#                  nrow=2, rel_heights = c(6,2), labels = c("A","B")) + theme(plot.margin = unit(c(0,3,0,0), "lines"))
+# 
+# pp2 <- plot_grid(p5 + theme(legend.position = "none"),p6,
+#                  nrow=2, rel_heights = c(6,2), labels = c("C","D")) + theme(plot.margin = unit(c(0,3,0,0), "lines"))
+# 
+# pp3 <- plot_grid(p7 + theme(legend.position = "none"),
+#                  p8,nrow=2, rel_heights = c(6,2), labels = c("E","F")) + theme(plot.margin = unit(c(0,3,0,0), "lines"))
+# 
+# pp4 <- plot_grid(p9 + theme(legend.position = "none"),
+#                  p10,nrow=2, rel_heights = c(6,2), labels = c("G","H")) + theme(plot.margin = unit(c(0,3,0,0), "lines"))
+# 
+# 
+# pp_a <- plot_grid(pp1,pp2,ggplot() + theme_void(),
+#                 ncol = 3, labels = c(""),rel_widths = c(1,1,0.3), scale = 0.95)
+# 
+# pp_b <- plot_grid(pp3,pp4,legend,
+#                 ncol = 3, rel_widths = c(1,1,0.3), labels = c(""), scale = 0.95)
+# 
+# pp <- plot_grid(pp_a,pp_b,ncol = 1)
+# 
+# 
+# 
+# ggsave("Figure_4.pdf",plot = pp, width = 13, height = 8, bg = "white")
+# ggsave("Figure_4.png",plot = pp, width = 13, height = 8, bg = "white")
 ```
 
 
 
-
-```{r, fig.width=9, fig.height=4.5}
-# pp <- plot_grid(
-#   plot_grid(p5, p7, rel_widths = c(7,4), labels=c("A","C")),
-#   plot_grid(p6, p8, labels=c("B","D"), scale=0.9),
-#   nrow=2, rel_heights = c(6,2)
-# )
-# ggsave("Fig4.pdf",plot = pp, width = 9, height = 4.5)
-# ggsave("Fig4.png",plot = pp, width = 9, height = 4.5)
-# pp
-```
 
 

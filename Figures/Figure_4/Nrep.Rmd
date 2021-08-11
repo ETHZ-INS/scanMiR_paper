@@ -1,0 +1,41 @@
+---
+title: "G-Bulge Example"
+author: "Michael Soutschek"
+date: "3 3 2021"
+output: html_document
+---
+
+
+```{r}
+suppressPackageStartupMessages({
+  library(scanMiR)
+  library(scanMiRApp)
+  library(scanMiRData)
+  library(rtracklayer)
+  library(GenomicRanges)
+  library(BiocParallel)
+})
+```
+
+
+# Get mods
+```{r}
+mods <- scanMiRData::getKdModels("hsa",NULL)
+mods_29 <- mods[["hsa-miR-29b-3p"]]
+```
+
+# Get Sequence
+```{r}
+human <- ScanMiRAnno(species = "GRCh38")
+
+# Nrep
+seq1 <- getTranscriptSequence("ENST00000379671",annotation = human, extract = "UTRonly")
+```
+
+#scan
+```{r}
+m1 <- findSeedMatches(seq1,mods_29,shadow = 15L,keepMatchSeq = TRUE,p3.extra = TRUE)
+
+saveRDS(m1,"Nrep_29.rds")
+```
+

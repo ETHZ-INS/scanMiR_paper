@@ -11,10 +11,10 @@ library(openxlsx)
 
 ```{r}
 tabs <- list(
-  "STable1_lncTDMD"=readRDS("../Figures/Figure_5/suppTable_lncTDMD.rds"),
+  "STable1_linearTDMD"=readRDS("../Figures/Figure_5/tdmd.rds"),
   "STable2_circTDMD"=readRDS("../Figures/Figure_5/suppTable_circTDMD.rds"),
-  "STable3_circSlicing"=readRDS("../Figures/Figure_5/suppTable_circSlicing.rds"),
-  "STable4_circSponges"=readRDS("../Figures/Figure_6/supp_table_sponges.rds")
+  "STable3_circSponges"=readRDS("../Figures/Figure_6/supp_table_sponges.rds"),
+  "STable4_circSlicing"=readRDS("../Figures/Figure_6/suppTable_circSlicing.rds")
 )
 ```
 

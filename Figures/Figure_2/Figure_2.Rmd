@@ -27,7 +27,7 @@ source("../misc.R")
 
 ```{r}
 mods <- getKdModels("hsa",categories = NULL)
-kd <- read.delim("/mnt/schratt/enrichMiR_data/miRNA_KD_CNN/predictions/hsa/hsa-miR-122-5p_kds.txt", colClasses = c(X12mer="character", log_kd="numeric", mir="factor", "mirseq"="factor", "aligned_type"=NULL, "best_stype"=NULL))
+kd <- read.delim("/mnt/schratt/scanMiR_paper_scripts/Parameter_Optimization/data/CNN/hsa/hsa-miR-122-5p_kds.txt", colClasses = c(X12mer="character", log_kd="numeric", mir="factor", "mirseq"="factor", "aligned_type"=NULL, "best_stype"=NULL))
 mod <- getKdModel(kd)
 kd <- kd[grep("X",kd$X12mer,invert=TRUE),]
 kd2 <- assignKdType(kd$X12mer, mod)
@@ -35,10 +35,14 @@ kd$compressed <- kd2$log_kd/1000
 
 set.seed(1234)
 kd2 <- kd[sample.int(nrow(kd), 100000),]
-p1a <- ggplot(kd2, aes(x=log_kd, y=compressed) ) +
+
+pearson <- cor.test(kd2$log_kd,kd2$compressed)
+pearson_R <- pearson$estimate
+
+p1a <- ggplot(kd2, aes(x=log_kd, y=compressed) ) + 
   geom_pointdensity(size=0.8, show.legend=FALSE) + scale_colour_viridis() + 
-  labs(x="Original log(KD)", y="Reconstituted log(KD)") + ggtitle("hsa-miR-122-5p") +
-  theme(legend.position = "top")
+  labs(x=bquote("Original"~log(K[D])), y=bquote("Reconstituted"~log(K[D]))) + ggtitle("hsa-miR-122-5p") +
+  theme(legend.position = "top") + annotate("text", x = -5, y = 2, label = paste0("R = ",round(pearson_R,4)))
 
 d <- data.frame(row.names=names(mods), conservation=conservation(mods),
                 correlation=sapply(mods,FUN=function(x) x$cor))
@@ -95,27 +99,28 @@ ggplot(ms, aes(m7, topNC)) + geom_abline(slope=1, colour="grey") + geom_point(ae
 
 
 ```{r, fig.width=10, fig.height=10}
-mirs <- c("hsa-miR-7-5p","hsa-miR-124-3p", "hsa-miR-499a-5p")
+mirs <- c("hsa-miR-199a-5p","hsa-miR-124-3p", "hsa-miR-499a-5p")
+#mirs <- c("hsa-miR-7-5p","hsa-miR-124-3p", "hsa-miR-499a-5p")
 #mirs <- c("hsa-miR-495-3p", "hsa-miR-124-3p", "hsa-miR-92b-5p")
 #mirs <- c("hsa-miR-214-5p","hsa-miR-124-3p", "hsa-miR-155-5p","hsa-miR-199a-5p")
-p2 <- ggplot(ms, aes(m6, topNC)) + geom_abline(slope=1, colour="grey") + geom_point(aes(colour=diffNC)) + geom_label_repel(data=ms[mirs,], aes(label=miRNA), nudge_x=c(-0.75,-0.75,0.8), nudge_y=c(0.3,0.75,-0.15)) + labs(x="median -log(KD) of 6mers", y="-log(KD) of top non-canonical", colour="log(KD) difference between\ntop and 5th non-canonical") + theme(legend.position = "bottom")
+p2 <- ggplot(ms, aes(m6, topNC)) + geom_abline(slope=1, colour="grey") + geom_point(aes(colour=diffNC)) + geom_label_repel(data=ms[mirs,], aes(label=miRNA), nudge_x=c(-0.75,-0.75,0.8), min.segment.length = 0.4, segment.color = "lightgrey",segment.size = 0.75) + labs(x=bquote("median -"*log(K[D])*" of 6mers"), y=bquote("-"*log(K[D])*" of top non-canonical"), colour=bquote(atop(" "~log(K[D])~"difference between", "top and 5th non-canonical"))) + theme(legend.position = "bottom")
 ps <- lapply(mirs, FUN=function(x){
-  plotKdModel(mods[[x]], what = "seeds") + 
+  p <- plotKdModel(mods[[x]], what = "seeds") + 
     theme(axis.text.y = element_text(family="mono"), 
-          plot.subtitle=element_text(family="mono")) +
+          plot.subtitle=element_text(family="mono"))
     # scale_fill_manual(values=c("7mer"= darkgreen, "6mer"="#4477AA",
     #                             "g-bulged 6mer"="#117733", "+A"="darkred",
     #                             "non-canonical"=light,
     #                            "g-bulged 7mer"= turquoise))
-      scale_fill_manual(values = type_cols)
+  p + scale_fill_manual(values = type_cols[p$data$type])
 })
 ps[[1]] <- ps[[1]] + theme(legend.position = "none")
 ps[[3]] <- ps[[3]] + theme(legend.position = "none")
 plot_grid(p1a, p1b, p2, ps[[3]], ps[[2]], ps[[1]], 
           ncol=2, rel_widths = c(5,4), rel_heights=c(3,4,4), scale=0.95, labels="AUTO")
 
-ggsave("Figure_2.png", height = 10,width = 8.5)
-ggsave("Figure_2.pdf", height = 10,width = 8.5)
+ggsave("Figure_2.png", height = 10,width = 9,bg = "white")
+ggsave("Figure_2.pdf", height = 10,width = 9,bg = "white")
 
 ```
 

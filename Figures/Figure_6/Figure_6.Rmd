@@ -18,7 +18,7 @@ theme_set(theme_cowplot(font_size = 12))
 ```{r}
 e <- readRDS("../../circRNAs/Mouse/enrichment.scores.7and8mers.rds")
 
-mirexp <- read.delim("../../circRNAs/Mouse/Normalized miRNA Brain expression from Chiang et al. 2010_.csv", sep=",")
+mirexp <- read.delim("../../Add_Datasets/Chiang/Normalized miRNA Brain expression from Chiang et al. 2010_.csv", sep=",")
 mirexp <- sapply(split(mirexp[,2], mirexp[,1]), na.rm=TRUE, FUN=max)
 e$mirexp <- mirexp[as.character(e$set)]
 e <- e[e$sites>5,]
@@ -41,22 +41,44 @@ cols <- c("#332288", "#88CCEE", "#44AA99", "#117733", "#999933", "#DDCC77",
 names(cols) <- levels(e$gene)
 
 
-p <- ggplot(e, aes(expression, -logp.binom+1)) + 
+p1 <- ggplot(e, aes(expression, -logp.binom+1)) + 
   geom_point(aes(colour=gene, size=sites, alpha=gene!="other")) + 
   scale_alpha_manual(values=c("TRUE"=0.5,"FALSE"=0.25), guide=FALSE) +
   scale_x_log10() + scale_y_log10() + scale_color_manual(values=cols) +
   labs(x="circRNA expression in the brain (BSJ counts)", 
        y="-log(binomial p.value)", colour="Host gene") +
   geom_point(data=etop, aes(colour=gene, size=sites)) + 
-  geom_text_repel(data=etop, aes(label=lab), min.segment.length = 0) +
-  ggtitle("circRNA-miRNA enrichment")
+  geom_text_repel(data=etop, aes(label=lab), min.segment.length = 0) 
 ```
 
 
+# circRNA Slicing sites
+
+```{r, fig.width=9, fig.height=4}
+sl <- readRDS("../../circRNAs/Mouse/slicing.rds")
+saveRDS(sl, "suppTable_circSlicing.rds")
+sl$gene[sl$gene=="C230004F18Rik"] <- "Cdr1as"
+sl$lab <- paste(gsub("mmu-","",sl$miRNA),sl$gene,sep="\n")
+sl <- sl[sl$mirexp > 0.4,]
+
+
+p2 <- ggplot(sl, aes(txexp,mirexp)) + geom_point() + 
+  geom_text_repel(data=sl[(sl$mirexp>15 & sl$txexp>10) | sl$txexp>10,], aes(label=lab),
+                   fill = NA, max.overlaps = 30, min.segment.length = 0, nudge_x = 0.3, nudge_y=c(-0.25,0.25)) + 
+  scale_x_log10() + scale_y_log10() + labs(x="circRNA expression in the brain (BSJ counts)", y="miRNA expression (logCPMs)") 
+p2
+```
+
 ```{r, fig.width=8, fig.height=4}
-p
-ggsave("Figure_6.png",p,width=8, height = 4)
-ggsave("Figure_6.pdf",p,width=8, height = 4)
+pp <- plot_grid( 
+  p1 + ggtitle("circRNA-miRNA enrichment"),
+  p2 + ggtitle("circRNA slicing sites") + ylab("miRNA expression\n(logCPMs)"),
+  nrow=2, rel_heights =c(5,2.75), labels="AUTO", scale=0.95
+)
+
+
+ggsave("Figure_6.png",pp,width=8, height = 7, bg = "white")
+ggsave("Figure_6.pdf",pp,width=8, height = 7, bg = "white")
 ```
 
 

@@ -15,8 +15,8 @@ suppressPackageStartupMessages({
   library(ensembldb)
   library(BSgenome.Hsapiens.UCSC.hg19)
   library(ggsci)
+  library(scanMiR)
 })
-devtools::load_all("~/scanMir/")
 ```
 
 
@@ -37,12 +37,12 @@ domnorm <- function(x, useMedian=FALSE){
 
 # aggregate all miRNAs using the given parameters
 aggAll <- function(m,ll, params=c(), ags=NULL){
-  bp <- c(b=0.5735, c=-1.7091, p3=0, bg = 0, coef_utr = 0, coef_orf = 0)
+  bp <- c(b=0.5735, c=0.1810, p3=0, coef_utr = 0, coef_orf = 0)
   bp <- c(bp,ags)
   bp[names(params)] <- as.numeric(params)
   res <- bplapply(setNames(names(m),names(m)), BPPARAM=MulticoreParam(length(m)), FUN=function(x){
     if(!("ag" %in% names(bp)) && !is.null(bp[[x]])) bp[["ag"]] <- bp[[x]]
-    x <- .aggregate_miRNA(m[[x]],ll = ll, ag=bp[["ag"]], b=bp[["b"]], c=bp[["c"]], p3=bp[["p3"]], coef_utr=bp[["coef_utr"]],coef_orf = bp[["coef_orf"]], toInt = FALSE)
+    x <- aggregateMatches(m[[x]], a=bp[["ag"]], b=bp[["b"]], c=bp[["c"]], p3=bp[["p3"]], coef_utr=bp[["coef_utr"]],coef_orf = bp[["coef_orf"]], toInt = FALSE, keepSiteInfo = FALSE)
     y <- x$repression
     names(y) <- x$transcript
     y
@@ -55,7 +55,7 @@ aggAll <- function(m,ll, params=c(), ags=NULL){
 }
 
 getComparisonTable <- function(params=c(), ob, ags=NULL){
-  bp <- c(b=0.5735, c=-1.7091, p3=0, bg = 0, coef_utr = 0, coef_orf = 0)
+  bp <- c(b=0.5735, c=0.1810, p3=0, coef_utr = 0, coef_orf = 0)
   bp[names(params)] <- as.numeric(params)
   d <- aggAll(m,ll, bp, ags = ags)
   colnames(ob) <- gsub("-",".",colnames(ob))
@@ -65,16 +65,16 @@ getComparisonTable <- function(params=c(), ob, ags=NULL){
   d$observed <- reshape2::melt(as.matrix(ob))[,"value"]
   d
 }
+
 ```
 
 
 ## Data
 ```{r}
 m <- readRDS(file = "../../../Parameter_Optimization/data/hsa.12mirs.HEK.fullScan.GR.rds")
-ll <- as.data.frame(metadata(m)$length.info)
-ll$transcript <- row.names(ll)
 m$transcript <- as.factor(seqnames(m))
 m <- split(mcols(m), m$miRNA)
+names(m)[2] <- "hsa-miR-133-3p"
 
 ob <- domnorm(read.delim("../../../Parameter_Optimization/data/McGeary_2019_raw/GSE140218_HEK293FT_transfection_logtpm_batchnormalized.txt", row.names=1))
 colnames(ob) <- names(m) # unsafe - they just happen to match
@@ -86,6 +86,7 @@ colnames(ob) <- names(m) # unsafe - they just happen to match
 
 ```{r}
 op1 <- readRDS("../../../Parameter_Optimization/ag_HEK/opt_ags_us_fitted.rds")
+op1$par <- exp(op1$par)
 op2 <- readRDS("../../../Parameter_Optimization/ag_HEK/opt_ags_us_fitted_p3.rds")
 op3 <- readRDS("../../../Parameter_Optimization/ag_HEK/opt_ags_fitted_utr_orf.rds")
 op4 <- readRDS("../../../Parameter_Optimization/ag_HEK/opt_ags_fitted_utr_orf_p3.rds")

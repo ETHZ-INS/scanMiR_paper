@@ -25,32 +25,51 @@ getFigNb <- function(increment=FALSE){
 }
 ```
 
-\vspace{2cm}
+\newpage
 
-```{r child='Suppl_1/Suppl_Aff.rmd', cache=TRUE}
+```{r child='Suppl_1/Suppl_1.rmd', cache=TRUE}
 ```
 
 \newpage
 
-```{r child='Suppl_2/Suppl1.Rmd', cache=TRUE}
+```{r child='Suppl_2/Suppl_2.Rmd', cache=TRUE}
 ```
 
 \newpage
 
-```{r child='Suppl_3/Suppl_2.Rmd', cache=TRUE}
+```{r child='Suppl_3/Suppl_3.Rmd', cache=TRUE}
 ```
 
 \newpage
 
-```{r child='Suppl_4/Suppl_4.1.Rmd', cache=TRUE}
+```{r child='Suppl_4/Suppl_4.Rmd', cache=FALSE}
 ```
 
 \newpage
 
-```{r child='Suppl_5/Suppl_4.2.Rmd', cache=TRUE}
+```{r child='Suppl_5/Suppl_5.Rmd', cache=TRUE}
 ```
 
 \newpage
 
-```{r child='Suppl_6/Suppl_5.Rmd', cache=FALSE}
+```{r child='Suppl_6/Suppl_6.Rmd', cache=FALSE}
+```
+
+\newpage
+
+# `r getFigNb(TRUE)`
+
+```{r app, out.width="82%", fig.align="center"}
+knitr::include_graphics("scanMiRApp_shots.png")
+```
+
+### `r getFigNb(FALSE)`
+
+**Screenshots showing some of the functionalities of the scanMiR web application.**
+The live app can be visited at https://ethz-ins.org/scanMiR/
+
+
+\newpage
+
+```{r child='Suppl_8/Suppl_8.Rmd'}
 ```

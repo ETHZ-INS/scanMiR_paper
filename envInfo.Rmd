@@ -1,0 +1,29 @@
+---
+title: "envInfo.Rmd"
+date: "6/14/2021"
+output:
+  html_document:
+    keep_md: true
+---
+
+```{r}
+# Gathering and loading all used packages
+
+lf <- list.files(pattern="\\.Rmd$", recursive = TRUE, full.names = TRUE)
+lf <- lf[!grepl("envInfo",lf)]
+packages <- unique(unlist(lapply(lf, FUN=function(x){
+  trimws(grep("library",readLines(x),value=TRUE))
+})))
+packages <- gsub(")","",gsub("library(","",packages,fixed=TRUE),fixed=TRUE)
+
+suppressPackageStartupMessages({
+  for(f in packages){
+    library(f, character.only=TRUE)
+  }
+})
+```
+
+```{r}
+sessionInfo()
+```
+

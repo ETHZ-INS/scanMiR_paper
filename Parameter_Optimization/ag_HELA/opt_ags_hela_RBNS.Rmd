@@ -19,11 +19,6 @@ suppressPackageStartupMessages({
 ```
 
 
-```{r}
-source("~/scanMir/R/aggregation.R")
-```
-
-
 ```{r fns}
 domnorm <- function(x, useMedian=FALSE){
   y <- setNames(seq_len(ncol(x)), colnames(x))
@@ -38,13 +33,13 @@ domnorm <- function(x, useMedian=FALSE){
 }
 
 # aggregate all miRNAs using the given parameters
-aggAll <- function(m, params=c(), ags=NULL){
-  bp <- c(b=0.5735, c=-1.7091, p3=0)
-  bp <- c(bp, ags)
+aggAll <- function(m,ll, params=c(), ags=NULL){
+  bp <- c(b=0.5735, c=0.1810, p3=0, coef_utr = 0, coef_orf = 0)
+  bp <- c(bp,ags)
   bp[names(params)] <- as.numeric(params)
   res <- bplapply(setNames(names(m),names(m)), BPPARAM=MulticoreParam(length(m)), FUN=function(x){
     if(!("ag" %in% names(bp)) && !is.null(bp[[x]])) bp[["ag"]] <- bp[[x]]
-    x <- .aggregate_miRNA(m[[x]], ag=bp[["ag"]], b=bp[["b"]], c=bp[["c"]], p3=bp[["p3"]],toInt = FALSE)
+    x <- aggregateMatches(m[[x]], a=bp[["ag"]], b=bp[["b"]], c=bp[["c"]], p3=bp[["p3"]], coef_utr=bp[["coef_utr"]],coef_orf = bp[["coef_orf"]], toInt = FALSE, keepSiteInfo = FALSE)
     y <- x$repression
     names(y) <- x$transcript
     y

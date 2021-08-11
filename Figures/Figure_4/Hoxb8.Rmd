@@ -7,14 +7,15 @@ output: html_document
 
 
 ```{r}
-devtools::load_all("/mnt/schratt/scanMir/")
 suppressPackageStartupMessages({
+  library(scanMiR)
+  library(scanMiRApp)
   library(scanMiRData)
   library(rtracklayer)
   library(GenomicRanges)
   library(BiocParallel)
 })
-devtools::load_all("/mnt/schratt/scanMiRApp/")
+
 ```
 
 

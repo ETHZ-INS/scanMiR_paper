@@ -31,7 +31,7 @@ suppressPackageStartupMessages({
 #colors
 ```{r}
 source("../misc.R")
-names(meth_cols2)[c(1,2,4,5,6)] <- c("McGeary et al.","McGeary et al.\nopt. a", "scanMiR\noptimal a", "scanMiR\nglobal a", "Targetscan")
+names(meth_cols2)[c(1,2,4,5,6)] <- c("McGeary et al.","McGeary et al.\nopt. a", "scanMiR\noptimal a", "scanMiR\nglobal a", "TargetScan")
 ```
 
 
@@ -44,11 +44,13 @@ df1_1 <- df1[c(1,length(df1$transcript)),]
 df1 <- df1[order(df1$sites),]
 df1$sites[df1$sites>8] <- 8
 
+
+
 p1a <- ggplot(df1,aes(x = -log2(exp(repression)),y = observed)) + 
   geom_point(alpha = 0.7, aes(color = sites)) + xlim(0,2.5) + 
   facet_grid(~Algorithm, scales = "fixed") + 
   xlab("Predicted repression (log2)") + ylab("Measured Fold Change\n(mean normalized)") + 
-  scale_colour_binned(show.limits = FALSE, type="viridis", direction=-1, breaks=1:8, labels=c(1:7,"8+")) +
+  scale_colour_binned(show.limits = FALSE, type="viridis", direction=-1, breaks=c(1:8),labels=c(1:7,"8+"))+
   guides(colour=guide_coloursteps(label.vjust=-0.25)) + theme_classic() + 
   annotate("text", x = 0.25 , y = -2.7, label = "miR-1-3p") +
   geom_text(data = df1_1, mapping = aes(label = paste0("r2 = ",round(as.numeric(cor),4))), x = 2, y = 1)
@@ -72,9 +74,11 @@ p1b <- ggplot(df1,aes(x = -log2(exp(repression)),y = observed)) + geom_point(alp
 df2 <- readRDS("./Hela/BarGraph_DF_RBNS.rds")
 df2$type <- gsub(" opt ags","",df2$type)
 df2$type <- gsub("Lin","et al.",df2$type)
+
 p2 <- ggplot(df2, aes(miRNA, r2, fill = type)) + 
   geom_col(position="dodge") + labs(fill="method") +
-  theme_classic() + scale_fill_manual(values=meth_cols2) + 
+  theme_classic() + 
+  scale_fill_manual(values=meth_cols2[df2$type]) + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "top") +
   #ggtitle("Correlations of RBNS Mirs") + 
   labs(x="", y="Correlation with observed\nrepression (r^2)")
@@ -84,11 +88,11 @@ p2 <- ggplot(df2, aes(miRNA, r2, fill = type)) +
 #p3
 ```{r}
 df3 <- readRDS("./HEK/BarGraph_DF.rds")
-newlvls <- c("McGeary et al.\nopt. a", "scanMiR\noptimal a", "scanMiR\nglobal a", "Targetscan")
+newlvls <- c("McGeary et al.\nopt. a", "scanMiR\noptimal a", "scanMiR\nglobal a", "TargetScan")
 levels(df3$type) <- newlvls
 p3 <- ggplot(df3, aes(miRNA, r2, fill = type)) + 
   geom_col(position="dodge") + labs(fill="method") +
-  theme_classic() + scale_fill_manual(values=meth_cols2) + 
+  theme_classic() + scale_fill_manual(values=meth_cols2[levels(df3$type)]) + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1), 
         legend.position = "top", legend.title = element_blank()) +
   #ggtitle("Correlations of HEK-transfection datasets") + 
@@ -102,6 +106,7 @@ df4 <- readRDS("../../Speed_Comparison/Speed_DF1.rds")
 df4$multithreading <- factor(df4$type2, unique(df4$type2))
 levels(df4$multithreading) <- c("single","12-cores")
 df4$Algorithm <- gsub("Lin","et al.",df4$Algorithm)
+df4$Algorithm <- gsub("Targetscan","TargetScan",df4$Algorithm)
 sp <- readRDS("../../Speed_Comparison/scanMiR/props.rds")
 #sapply(sp, FUN=function(x) sum(x$widths))
 
@@ -121,7 +126,7 @@ g <- gtable_add_grob(g,
 
 p4a <- ggplot(df4,aes(x = Sequences, y = time, color = Algorithm)) + 
   geom_line(aes(linetype = multithreading), lwd=1.4) + geom_point(size=3) +
-  scale_color_manual(values=meth_cols2) + theme_classic() +scale_y_log10() + 
+  scale_color_manual(values=meth_cols2[df4$Algorithm]) + theme_classic() +scale_y_log10() + 
   scale_x_log10() + 
   labs(x="Number of sequences", y="Running time (s)", color="algorithm") 
 
@@ -130,48 +135,23 @@ p4 <- plot_grid(p4a,g,ncol = 1, rel_heights = c(3,1))
 ```
 
 
-# Plot G-Bulge
-```{r}
-#mods
-mods <- scanMiRData::getKdModels("hsa",NULL)
-mods_124 <- mods[["hsa-miR-124-3p"]]
 
-#Mink1
-Mink1 <- readRDS("BindingExamples/Mink1_124.rds")
-Mink1_df <- as.data.frame(Mink1)
-
-p5 <- as_grob(~viewTargetAlignment(Mink1[2],mods_124,flagBulgeMatches=TRUE, maxBulgeSize=5, maxBulgeDiff=Inf,outputType = "plot",cex=1.05))
-
-# Mink1 table
-
-# Mink1_table <- Mink1_df[order(Mink1_df$start),c("seqnames","start","end","type")]
-# tt2 <- ttheme_default(core=list(fg_params=list(hjust=1, x=0.9)),
-#                       rowhead=list(fg_params=list(hjust=1, x=0.95)),
-#                       base_size = 11)
-# g2 <- tableGrob(Mink1_table,rows = NULL,theme = tt2)
-# g2 <- gtable_add_padding(g2, unit(c(0,15,5,0), "mm"))
-```
 
 
 
 ## Combine
 ```{r, fig.height=8, fig.width=9.5}
-bl <- ggplot() + theme_void()
+
 
 pp1 <- plot_grid(
-  plot_grid(p1a, p2, labels="AUTO", rel_widths=c(2,1), scale=0.96),
+  plot_grid(p1b, p2, labels="AUTO", rel_widths=c(2,1), scale=0.96),
   plot_grid(p3, p4, labels=c("C","D"), rel_widths=c(1.6,1), scale=0.96),
   nrow=2, rel_heights=c(1,1.2)
 )
 
 
-pp2 <- plot_grid(bl,p5,bl,ncol = 3,labels = c("","E",""), rel_widths = c(1,5,1))
-pp2 <- pp2 + draw_text("miR-124-3p g-bulged 7mer site at nt 723 of Mink1", x = 0.25, y = 0.8, hjust = 0, fontface = "italic", size = 11) 
-
-pp <- plot_grid(pp1,pp2,ncol = 1,labels = "",rel_heights = c(3,0.7))
-
-ggsave("Figure_3.pdf",plot = pp, width = 10, height = 11)
-ggsave("Figure_3.png",plot = pp, width = 10, height = 11)
+ggsave("Figure_3.pdf",plot = pp1, width = 10, height = 9,bg = "white")
+ggsave("Figure_3.png",plot = pp1, width = 10, height = 9,bg = "white")
 ```
 
 Trying out a less sequeezed representation:

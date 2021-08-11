@@ -10,7 +10,6 @@ output: html_document
 ## Pkgs & functions
 
 ```{r pkgs}
-devtools::load_all("~/scanMir/")
 suppressPackageStartupMessages({
   library(GenomicRanges)
   library(scanMiR)
@@ -37,12 +36,12 @@ domnorm <- function(x, useMedian=FALSE){
 
 # aggregate all miRNAs using the given parameters
 aggAll <- function(m,ll, params=c(), ags=NULL){
-  bp <- c(b=0.5735, c=-1.7091, p3=0, coef_utr = 0, coef_orf = 0)
-  bp <- c(bp, ags)
+  bp <- c(b=0.5735, c=0.1810, p3=0, coef_utr = 0, coef_orf = 0)
+  bp <- c(bp,ags)
   bp[names(params)] <- as.numeric(params)
   res <- bplapply(setNames(names(m),names(m)), BPPARAM=MulticoreParam(length(m)), FUN=function(x){
     if(!("ag" %in% names(bp)) && !is.null(bp[[x]])) bp[["ag"]] <- bp[[x]]
-    x <- .aggregate_miRNA(m[[x]], ll=ll,ag=bp[["ag"]], b=bp[["b"]], c=bp[["c"]], p3=bp[["p3"]],coef_utr=bp[["coef_utr"]],coef_orf = bp[["coef_orf"]],toInt = FALSE)
+    x <- aggregateMatches(m[[x]], a=bp[["ag"]], b=bp[["b"]], c=bp[["c"]], p3=bp[["p3"]], coef_utr=bp[["coef_utr"]],coef_orf = bp[["coef_orf"]], toInt = FALSE, keepSiteInfo = FALSE)
     y <- x$repression
     names(y) <- x$transcript
     y
@@ -55,7 +54,7 @@ aggAll <- function(m,ll, params=c(), ags=NULL){
 }
 
 getComparisonTable <- function(params=c(), ob, ags=NULL){
-  bp <- c(b=0.5735, c=-1.7091, p3=0, coef_utr = 0, coef_orf = 0)
+  bp <- c(b=0.5735, c=0.1810, p3=0, coef_utr = 0, coef_orf = 0)
   bp[names(params)] <- as.numeric(params)
   d <- aggAll(m,ll, bp, ags = ags)
   colnames(ob) <- gsub("-",".",colnames(ob))
@@ -66,18 +65,14 @@ getComparisonTable <- function(params=c(), ob, ags=NULL){
   d
 }
 
-# correlation-based cost function
-# costCor <- function(params){
-#   d <- getComparisonTable(params, ob, ags)
-#   sum(sapply(split(d, d$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2))
-# }
 
 # ms: use this one here
 costCor <- function(params){
-  d <- getComparisonTable(params, ob, ags)
+  d <- getComparisonTable(params, ob, ags=ags)
   m <- (sapply(split(d, d$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2))
   sum(m)+median(m)+min(m)
 }
+
 
 # distance-based
 # cost <- function(params){
@@ -100,10 +95,9 @@ costCor <- function(params){
 ags <- c('hsa-miR-122-5p'=-5, 'hsa-miR-133-3p'=-5, 'hsa-miR-138-5p'=-5, 'hsa-miR-145-5p'=-5, 'hsa-miR-184'=-5, 'hsa-miR-190a-5p'=-5, 'hsa-miR-200b-3p'=-5, 'hsa-miR-216a-5p'=-5, 'hsa-miR-217-5p'=-5, 'hsa-miR-219a-5p'=-5, 'hsa-miR-375-3p'=-5, 'hsa-miR-451a'=-5)
 
 m <- readRDS(file = "../data/hsa.12mirs.HEK.fullScan.GR.rds")
-ll <- as.data.frame(metadata(m)$length.info)
-ll$transcript <- row.names(ll)
 m$transcript <- as.factor(seqnames(m))
 m <- split(mcols(m), m$miRNA)
+names(m)[2] <- "hsa-miR-133-3p"
 
 ob <- domnorm(read.delim("../data/McGeary_2019_raw/GSE140218_HEK293FT_transfection_logtpm_batchnormalized.txt", row.names=1))
 colnames(ob) <- names(m) # unsafe - they just happen to match
@@ -126,34 +120,19 @@ saveRDS(op,"opt_ags_us_fitted.rds")
 
 # ags + p3
 ```{r}
-ags <- readRDS("opt_ags_us_r2.rds")
+ags <- readRDS("opt_ags_us_fitted.rds")
+#These parameters here were still fit as logarithmic values
 ags <- ags$par
-op <- optim(par=c(ags,p3 = 0.1), fn=costCor, control=list(fnscale=-1))
+ags <- exp(ags)
+op <- optim(par=c(p3 = 0.1,ags), fn=costCor, control=list(fnscale=-1))
 op$par
 saveRDS(op,"opt_ags_us_fitted_p3.rds")
 ```
 
 
-# opt ags + utr / orf
-```{r}
-# costCor2 <- function(params,ags){
-#   d <- getComparisonTable(params, ob, ags = ags)
-#   m <- (sapply(split(d, d$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2))
-#   sum(m)+median(m)+min(m)
-# }
-# 
-# ags <- readRDS("opt_ags_us_r2.rds")
-# ags <- ags$par
-# op <- optim(par=c(coef_utr = -0.2, coef_orf = -0.2), fn=costCor2,ags = ags, control=list(fnscale=-1))
-# op$par
-# saveRDS(op,"opt_ags_utr_orf.rds")
-```
-
 
 # opt ags fitted + utr / orf
 ```{r}
-ags <- readRDS("opt_ags_us_r2.rds")
-ags <- ags$par
 op <- optim(par=c(ags,coef_utr = -0.2, coef_orf = -0.2), fn=costCor,control=list(fnscale=-1))
 op$par
 saveRDS(op,"opt_ags_fitted_utr_orf.rds")
@@ -162,8 +141,6 @@ saveRDS(op,"opt_ags_fitted_utr_orf.rds")
 
 # opt ags fitted + utr / orf + p3
 ```{r}
-ags <- readRDS("opt_ags_us_r2.rds")
-ags <- ags$par
 op <- optim(par=c(ags,coef_utr = -0.2, coef_orf = -0.2, p3 = 0.1), fn=costCor,control=list(fnscale=-1))
 op$par
 saveRDS(op,"opt_ags_fitted_utr_orf_p3.rds")
@@ -179,14 +156,14 @@ saveRDS(op,"opt_ags_fitted_utr_orf_p3.rds")
 
 ```{r}
 # get the predictions at the optimal parameters:
-op <- readRDS("opt_ags_us_r2_hek.rds")
+op <- readRDS("opt_ags_fitted_utr_orf_p3.rds")
 d <- getComparisonTable(op$par, ob)
 # get the per-miRNA correlations:
 cors <- sapply(split(d, d$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
 #show_col(pal_nejm("default")(2))
 ggplot(data.frame(miRNA=names(cors), r2=cors), aes(miRNA, r2)) + geom_col(fill = "#BC3C29FF", alpha = 0.8) + coord_flip() + geom_text(aes(label=round(cors,4))) 
 
-ggsave("hek_corr_opt_ag.png", width = 7)
+#ggsave("hek_corr_opt_ag.png", width = 7)
 
 # plot:
 LSD::heatscatter(d$predicted, d$observed,xlim = c(-1.5,1.5), ylim = c(-1.5,1.5))

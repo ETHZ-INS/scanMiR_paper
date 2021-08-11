@@ -19,12 +19,12 @@ suppressPackageStartupMessages({
 })
 
 mods <- scanMiRData::getKdModels("hsa",NULL)
-mods2 <- mods[c("hsa-miR-122-5p", "hsa-miR-133-3p", 
+mods2 <- mods[c("hsa-miR-122-5p", "hsa-miR-133a-3p",
 "hsa-miR-138-5p", "hsa-miR-145-5p", "hsa-miR-184", "hsa-miR-190a-5p", 
 "hsa-miR-200b-3p", "hsa-miR-216a-5p", "hsa-miR-217-5p", "hsa-miR-219a-5p", 
 "hsa-miR-375-3p", "hsa-miR-451a")]
 
-g <- rtracklayer::import.gff("data/McGeary_2019_raw/GSE140217_HEK_transcriptannotations.gtf.gz")
+g <- rtracklayer::import.gff("/mnt/schratt/scanMiR_paper_scripts/Parameter_Optimization/data/McGeary_2019_raw/GSE140218_HEK293_transcriptannotations.gtf")
 g <- g[g$type!="5UTR"]
 g <- as.list(split(g,strand(g)))
 g[["+"]] <- g[["+"]][order(start(g[["+"]]))]

@@ -37,12 +37,12 @@ domnorm <- function(x, useMedian=FALSE){
 
 # aggregate all miRNAs using the given parameters
 aggAll <- function(m,ll, params=c(), ags=NULL){
-  bp <- c(b=0.5735, c=-1.7091, p3=0, bg = 0, coef_utr = 0, coef_orf = 0)
+  bp <- c(b=0.5735, c=0.1810, p3=0, coef_utr = 0, coef_orf = 0)
   bp <- c(bp,ags)
   bp[names(params)] <- as.numeric(params)
   res <- bplapply(setNames(names(m),names(m)), BPPARAM=MulticoreParam(length(m)), FUN=function(x){
     if(!("ag" %in% names(bp)) && !is.null(bp[[x]])) bp[["ag"]] <- bp[[x]]
-    x <- .aggregate_miRNA(m[[x]],ll = ll, ag=bp[["ag"]], b=bp[["b"]], c=bp[["c"]], p3=bp[["p3"]], coef_utr=bp[["coef_utr"]],coef_orf = bp[["coef_orf"]], toInt = FALSE)
+    x <- aggregateMatches(m[[x]], a=bp[["ag"]], b=bp[["b"]], c=bp[["c"]], p3=bp[["p3"]], coef_utr=bp[["coef_utr"]],coef_orf = bp[["coef_orf"]], toInt = FALSE, keepSiteInfo = FALSE)
     y <- x$repression
     names(y) <- x$transcript
     y
@@ -55,7 +55,7 @@ aggAll <- function(m,ll, params=c(), ags=NULL){
 }
 
 getComparisonTable <- function(params=c(), ob, ags=NULL){
-  bp <- c(b=0.5735, c=-1.7091, p3=0, bg = 0, coef_utr = 0, coef_orf = 0)
+  bp <- c(b=0.5735, c=0.1810, p3=0, coef_utr = 0, coef_orf = 0)
   bp[names(params)] <- as.numeric(params)
   d <- aggAll(m,ll, bp, ags = ags)
   colnames(ob) <- gsub("-",".",colnames(ob))
@@ -84,16 +84,13 @@ op_orig <- readRDS("orig_p3.rds")
 par <- op_orig$par
 ags<- par[!names(par) %in% "p3"]
 
-m <- readRDS("../hsa.12mirs.HELA.fullScan.GR.rds")
-# prepare length data
-ll <- as.data.frame(metadata(m)$length.info)
-ll$transcript <- row.names(ll)
+m <- readRDS("../data/hsa.12mirs.HELA.fullScan.GR.rds")
 # prepare m
 m$transcript <- as.factor(seqnames(m))
 m <- split(mcols(m), m$miRNA)
 m <- m[c("cel-lsy-6","hsa-miR-1-3p","hsa-miR-124-3p","hsa-miR-155-5p","hsa-miR-7-5p"),]
 
-ob <- read.delim("../data/GSE140217_HeLa_transfection_logtpm_batchnormalized.txt", row.names=1)
+ob <- read.delim("../data/McGeary_2019_raw/GSE140217_HeLa_transfection_logtpm_batchnormalized.txt", row.names=1)
 ob <- ob[,which(names(ob) %in% c("lsy6","mir1","mir124","mir155","mir7"))]
 ob <- domnorm(ob)
 colnames(ob) <- names(m) # unsafe - they just happen to match
@@ -140,7 +137,7 @@ saveRDS(op,"orig_ags_fitted_utr_orf_p3.rds")
 
 ## Checking it out
 ```{r}
-op_utr <- readRDS("orig_utr_orf.rds")
+op_utr <- readRDS("orig_ags_fitted_utr_orf_p3.rds")
 d <- getComparisonTable(op_utr$par, ob, ags = ags)
 # get the per-miRNA correlations:
 cors <- sapply(split(d, d$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)

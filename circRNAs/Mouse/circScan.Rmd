@@ -57,7 +57,7 @@ seqs <- readRDS("mcircSeqs_processed.rds")
 ```{r}
 mods <- getKdModels("mmu", c("Conserved across mammals","Conserved across vertebrates","Poorly conserved"))
 m <- findSeedMatches(seqs, mods, onlyCanonical=TRUE, BP=MulticoreParam(12,progressbar = TRUE),verbose=TRUE,
-                             useTmpFiles=TRUE, keepTmpFiles="/mnt/schratt/tmp/")
+                             useTmpFiles=TRUE)
 
 saveRDS(m, file="canonical.GR.rds")
 ```
