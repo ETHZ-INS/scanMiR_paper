@@ -66,7 +66,7 @@ p1aj <- ggplot(kd, aes(x=log_kd, y=residual) ) +
     theme(legend.position="none", strip.background = element_blank(), strip.text.x = element_blank())
 p1 <- ggarrange(p1a + theme(axis.title.x = element_blank()), p1aj, nrow = 2, heights = c(5,3), align = "v")
 
-p1b <- ggplot(d, aes(correlation, toplogKd)) + geom_pointdensity(show.legend=FALSE) + scale_colour_viridis() + labs(x="Correlation with original", y=bquote("Strongest "~-log(K[D]))) +
+p1b <- ggplot(d, aes(correlation, toplogKd)) + geom_pointdensity(show.legend=FALSE) + scale_colour_viridis() + labs(x="Correlation with original", y=bquote("Strongest "~log(K[D]))) +
   geom_vline(xintercept=c(cor(kd1$log_kd,kd1$compressed),cor(kd2$log_kd,kd2$compressed)), linetype="dashed")
 p1b <- ggExtra::ggMarginal(p1b, type="histogram", margins="x", fill="darkblue", size=4)
 
@@ -122,9 +122,11 @@ p2 <- ggplot(ms, aes(m6, topNC)) + geom_abline(slope=1, colour="grey") +
   geom_point(aes(colour=gini)) + 
   geom_label_repel(data=ms[mirs,], aes(label=miRNA), nudge_x=c(-0.75,-0.75,0.8), 
                    min.segment.length = 0, segment.color = "black", segment.size= 1) + 
-  labs(x=bquote("median -"*log(K[D])*" of 6mers"), y=bquote("-"*log(K[D])*" of top non-canonical"), 
-       colour=bquote(atop("Gini"~(K[D])~"of the      ", "top 15 7mers"))) + theme(legend.position = "bottom") +
-   scale_colour_viridis(breaks=scales::pretty_breaks(3))
+  labs(x=bquote("median -"*log(K[D])*" of 6mers"), y=
+         bquote(atop("-"*log(K[D])*" of top","non-canonical")), 
+       colour=bquote(atop("Gini"~(K[D])~"of the      ", "top 15 k-mers  "))) + 
+  theme(legend.position = "bottom") +
+  scale_colour_viridis(breaks=scales::pretty_breaks(3))
 
 ps <- lapply(mirs, FUN=function(x){
   p <- plotKdModel(mods[[x]], what = "seeds") + 
