@@ -14,6 +14,7 @@ suppressPackageStartupMessages({
   library(cowplot)
   library(ggpointdensity)
   library(viridis)
+  library(ggpubr)
 })
 theme_set(theme_cowplot(font_size=12, rel_large=15/14))
 ```
@@ -49,6 +50,7 @@ kd$compressed <- kd2$log_kd/1000
 kd2 <- kd[sample.int(nrow(kd), 100000),]
 
 kd <- rbind(kd1, kd2)
+kd$residual <- kd$log_kd-kd$compressed
 kd$X12mer <- kd$mirseq <- NULL
 p1a <- ggplot(kd, aes(x=log_kd, y=compressed) ) + 
   ggrastr::rasterize(geom_pointdensity(size=0.8, show.legend=FALSE), dpi=150) +
@@ -57,18 +59,18 @@ p1a <- ggplot(kd, aes(x=log_kd, y=compressed) ) +
   geom_text(data=data.frame(x=-4.8,y=2,mir=unique(kd$mir),label=paste0("r=",round(c(cor(kd1$log_kd,kd1$compressed),cor(kd2$log_kd,kd2$compressed)),3))), aes(x=x,y=y,label=label)) +
   facet_wrap(~mir, nrow=1)
 
-
-
-p1b <- ggplot(d, aes(correlation, fill=)) + 
-  geom_histogram(bins = 50, fill="darkblue") + 
-  xlab("Pearson correlation with original") + ggtitle("All human miRNAs") +
-  geom_vline(xintercept=c(cor(kd1$log_kd,kd1$compressed),cor(kd2$log_kd,kd2$compressed)), linetype="dashed")
+p1aj <- ggplot(kd, aes(x=log_kd, y=residual) ) + 
+    ggrastr::rasterize(geom_pointdensity(size=0.8, show.legend=FALSE), dpi=150) +
+    labs(x=bquote("Original"~log(K[D])), y="Residuals") +
+    scale_colour_viridis() + facet_wrap(~mir, nrow=1) +
+    theme(legend.position="none", strip.background = element_blank(), strip.text.x = element_blank())
+p1 <- ggarrange(p1a + theme(axis.title.x = element_blank()), p1aj, nrow = 2, heights = c(5,3), align = "v")
 
 p1b <- ggplot(d, aes(correlation, toplogKd)) + geom_pointdensity(show.legend=FALSE) + scale_colour_viridis() + labs(x="Correlation with original", y=bquote("Strongest "~-log(K[D]))) +
   geom_vline(xintercept=c(cor(kd1$log_kd,kd1$compressed),cor(kd2$log_kd,kd2$compressed)), linetype="dashed")
-p1b <- ggExtra::ggMarginal(p1b, type="histogram",margins = "x", fill="darkblue")
+p1b <- ggExtra::ggMarginal(p1b, type="histogram", margins="x", fill="darkblue", size=4)
 
-p1 <- plot_grid(p1a, p1b, labels="AUTO", rel_widths = c(5,2), scale=0.95)
+#plot_grid(p1a, p1b, labels="AUTO", rel_widths = c(5,2), scale=0.95)
 ```
 
 
@@ -104,11 +106,14 @@ mod <- loess(ms$topNC~ms$m7)
 ms$topNC.dev <- ms$topNC - mod$fitted
 ms$miRNA <- row.names(ms)
 
-ggplot(ms, aes(m7, topNC)) + geom_abline(slope=1, colour="grey") + geom_point(aes(colour=diffNC)) + geom_label_repel(data=ms[order(ms$topNC.dev,decreasing=TRUE)[1:10],], aes(label=miRNA), min.segment.length = 0) + labs(x="-logKD of 7mer", y="-logKD of top non-canonical", colour="Gini coefficient of the top 15 7mers") + theme(legend.position = "bottom")
+ggplot(ms, aes(m7, topNC)) + geom_abline(slope=1, colour="grey") + 
+  geom_point(aes(colour=diffNC)) + 
+  geom_label_repel(data=ms[order(ms$topNC.dev,decreasing=TRUE)[1:10],], aes(label=miRNA), min.segment.length = 0) + 
+  labs(x="-logKD of 7mer", y="-logKD of top non-canonical", colour="Gini coefficient of the top 15 7mers") + theme(legend.position = "bottom")
 ```
 
 
-```{r, fig.width=10, fig.height=10}
+```{r, fig.width=10, fig.height=11}
 mirs <- c("hsa-miR-199a-5p","hsa-miR-124-3p", "hsa-miR-499a-5p")
 #mirs <- c("hsa-miR-7-5p","hsa-miR-124-3p", "hsa-miR-499a-5p")
 #mirs <- c("hsa-miR-495-3p", "hsa-miR-124-3p", "hsa-miR-92b-5p")
@@ -117,7 +122,8 @@ p2 <- ggplot(ms, aes(m6, topNC)) + geom_abline(slope=1, colour="grey") +
   geom_point(aes(colour=gini)) + 
   geom_label_repel(data=ms[mirs,], aes(label=miRNA), nudge_x=c(-0.75,-0.75,0.8), 
                    min.segment.length = 0, segment.color = "black", segment.size= 1) + 
-  labs(x=bquote("median -"*log(K[D])*" of 6mers"), y=bquote("-"*log(K[D])*" of top non-canonical"), colour=bquote(atop("Gini"~(K[D])~"of the", "top 15 7mers"))) + theme(legend.position = "bottom") +
+  labs(x=bquote("median -"*log(K[D])*" of 6mers"), y=bquote("-"*log(K[D])*" of top non-canonical"), 
+       colour=bquote(atop("Gini"~(K[D])~"of the      ", "top 15 7mers"))) + theme(legend.position = "bottom") +
    scale_colour_viridis(breaks=scales::pretty_breaks(3))
 
 ps <- lapply(mirs, FUN=function(x){
@@ -133,8 +139,8 @@ ps <- lapply(mirs, FUN=function(x){
 ps[[1]] <- ps[[1]] + theme(legend.position = "none")
 ps[[3]] <- ps[[3]] + theme(legend.position = "none")
 
-plot_grid(p1a, p1b, p2, ps[[3]], ps[[2]], ps[[1]], 
-          ncol=2, rel_widths = c(5,4), rel_heights=c(3,4,4), scale=0.95, labels="AUTO")
+plot_grid(p1, p1b, p2, ps[[3]], ps[[2]], ps[[1]], 
+          ncol=2, rel_widths = c(5,4), rel_heights=c(5,4,4), scale=0.95, labels="AUTO")
 
 ggsave("Figure_2.png", height=10, width=9, bg="white")
 ggsave("Figure_2.pdf", height=10, width=9, bg="white")
