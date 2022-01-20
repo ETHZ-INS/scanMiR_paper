@@ -25,6 +25,9 @@ knitr::opts_chunk$set(fig.width=8)
 suppressPackageStartupMessages({
   library(ggplot2)
   library(cowplot)
+  library(viridis)
+  library(grid)
+  library(gridExtra)
 })
 source("../../misc.R")
 ```
@@ -32,94 +35,72 @@ source("../../misc.R")
 
 ```{r, include=FALSE}
 
-df1 <- readRDS("mir124_hela_cor_df.rds")
-
-p1 <- ggplot(df1, aes(x = ag, y = r2)) + 
-  geom_line(size = 1) +
-  geom_vline(xintercept = -4.863126, linetype = "dashed", color = "grey42") + 
-  theme_bw() +
-  ylab(expression(~r^2)) +
-  ggtitle("HELA: mir124") + 
-  theme_classic() + 
-  xlab("log(a)")
+df <- readRDS("../../../Revision/Targetscan8_correlation/BarGraph_DF_HEK_revision.rds")
+df <- df[df$type != "scanMiR hg38 utr", ]
+df <- df[df$type != "scanMiR hg38 utr can.", ]
+df <- df[df$type != "scanMiR hg38 can.", ]
 
 
-df2 <- readRDS("mir138_hela_cor_df.rds")
-df_T <- readRDS("../../../Targetscan_Correlation/Run_Targetscan/Targetscan_corr_hek.rds")
-df_T <- df_T[,c(3,1,2)]
-colnames(df_T) <- c("miRNA","r2","type")
-tar_138 <- df_T[df_T$miRNA == "miR.138.5p","r2"]
+mirs <- levels(as.factor(as.character((df$miRNA))))
 
+col1 <- rev(RColorBrewer::brewer.pal(11, "Blues")[c(3,5,7,9)])
+col2 <- rev(RColorBrewer::brewer.pal(11, "Greens")[c(3,5,7,9)])
+col3 <- rev(RColorBrewer::brewer.pal(8, "Greys")[c(3,5,7)])
+cols <- c(col1,col2,col3)
 
-p2 <- ggplot(df2, aes(x = ag, y = r2)) + 
-  geom_line(size = 1) +
-  theme_bw() +
-  geom_hline(aes(yintercept = tar_138, color = "TargetScan")) +
-  scale_color_manual(values = "#7CAE00") +
-  geom_vline(xintercept = -4.863126, linetype = "dashed", color = "grey42") + 
-  ylab(expression(~r^2)) +
-  ggtitle("HEK: mir138") + 
-  ylim(0,0.25) + 
-  theme_classic() + 
-  xlab("log(a)") + 
-  theme(legend.title = element_blank())
-  
+plot_list <- list()
+for(i in mirs){
+  dfi <- df[df$miRNA == i,]
+  p <- ggplot(dfi, aes(miRNA, r2, fill = type)) + 
+          geom_col(position="dodge", show.legend = FALSE) +
+          theme_classic() +
+          ggtitle(i) +
+          theme(axis.text.x=element_blank(),
+                axis.ticks.x=element_blank(),
+                axis.title = element_blank(),
+                plot.title = element_text(hjust = 0.5)) +
+          #scale_fill_viridis_d(alpha = 0.8) +
+          scale_fill_manual(values = cols) +
+          scale_y_continuous(expand = c(0, 0), limits = c(0,0.325), breaks = c(0,0.05,0.1,0.15,0.2,0.25,0.3) ) 
+  plot_list[[i]] <- p
+}
 
+p1 <- ggplot(df, aes(miRNA, r2, fill = type)) + 
+          geom_col(position="dodge", show.legend = TRUE) +
+          theme_classic() +
+          ggtitle(i) +
+          theme(axis.text.x=element_blank(),
+                axis.ticks.x=element_blank(),
+                axis.title = element_blank(),
+                plot.title = element_text(hjust = 0.5),
+                legend.position = "bottom",
+                legend.title = element_blank(),
+                legend.spacing.x = unit(0.5, 'cm')) +
+          guides(fill=guide_legend(nrow=3,byrow=TRUE)) +
+           #scale_fill_viridis_d(alpha = 0.8) +
+          scale_fill_manual(values = cols) +
+          scale_y_continuous(expand = c(0, 0), limits = c(0,0.325), breaks = c(0,0.05,0.1,0.15,0.2,0.25,0.3) ) 
 
-# HeLa bargraph
-
-df3 <- readRDS("./Hela/BarGraph_DF_Hela.rds")
-df3$type <- as.character(df3$type)
-df3[1:16,"type"] <- "scanMiR opt. a"
-df3[17:32,"type"] <- "McGeary opt. a"
-df3$type <- as.factor(df3$type)
-
-p3 <- ggplot(df3, aes(miRNA, r2, fill = type)) + 
-  geom_col(position="dodge") +
-  scale_fill_manual(values = meth_cols2[levels(df3$type)]) + 
-  facet_grid(~ KDs, scales = "free_x", space = "free_x") + 
-  theme_classic() + 
-  theme(
-    panel.border =element_rect(color="black", fill=NA),
-    text = element_text(size=12),
-    legend.title = element_text(size = rel(0.9)),
-    legend.text = element_text(size = rel(0.8)),
-    strip.text.x = element_text(size=12),
-    axis.title.x=element_blank(),
-    axis.text.x =element_text(angle=45, hjust=1)
-  ) +
-  labs(fill = "Method")
+legend <- get_legend(
+  # create some space to the left of the legend
+  p1
+)
 ```
 
 
 ```{r, include=FALSE}
-# df4 <- readRDS("BarGraph_Pass.rds")
-# 
-# p4 <- ggplot(df4[df4$type != "Targetscan",], aes(miRNA, r2, fill = type)) + 
-#   geom_col(position="dodge") +
-#   scale_fill_manual(values = meth_cols2) + 
-#   theme_classic() + 
-#   theme(
-#                 panel.border =element_rect(color="black", fill=NA),
-#                 text = element_text(size=12),
-#                 legend.title = element_text(size = rel(0.9)),
-#                 legend.text = element_text(size = rel(0.8)),
-#                 axis.title.x=element_blank()
-#   ) +
-#   labs(fill = "Method")
+pp1 <- plot_grid(plotlist =  plot_list, ncol = 4) 
+y.grob <- textGrob(bquote("Correlation with observed repression"~(r^2)),gp=gpar(fontsize=15),rot=90)
+pp1 <- grid.arrange(arrangeGrob(pp1, left = y.grob))
+pp2 <- plot_grid(pp1,legend,ncol = 1, rel_heights = c(4,1))
+ggsave("Suppl_2.png",height = 10, width = 11, bg = "white")
 ```
 
-
-
-```{r, fig.width=8, fig.height=6}
-pp1 <- plot_grid(p1,p2,labels = "AUTO",rel_widths = c(1.5,2))
-#pp <- plot_grid(pp1,p3,p4,labels = c("","C","D"), ncol = 1,rel_heights = c(1,1.3,1.3))
-pp <- plot_grid(pp1,p3,labels = c("","C"), ncol = 1,rel_heights = c(1,1.3))
-pp
-
-#ggsave("Suppl1.png",plot = pp, width = 10,height = 7)
+```{r,fig.width=11, fig.height=10}
+pp2
 ```
+
 
 ### `r getFigNb()`
 
-**Pearson correlations of scanMiR repression predictions to measured changes in HeLa cells. A-B:** Deviations of *a* from the optimal value still lead to high correlations of scanMiR repression predictions with measured mRNA logFC in cells upon miRNA mimic transfections, outperforming TargetScan predictions over several orders of magnitudes (**B**). **C:** The correlations of predicted repression to observed foldchange upon miRNA-mimic transfection obtained with scanMiR is comparable to those obtained from the original CNN-values from McGeary et al. (2019). miRNAs used in RBNS experiments are displayed on the right side.
+**Comparison of scanMiR repression predictions versus TargetScan8 occupancy scores.** Pearson correlations of scanMiR repression predictions and TargetScan8 (TS8) occupancy scores with measured mRNA changes following miRNA mimic transfections in HEK cells (McGeary et al., 2019). The first four bars for each miRNA indicate the correlations of default scanMiR repression predictions obtained with different genome annotations (hek = Custom HEK cell annotation from McGeary et al. (2019), hg19 = GRCh37, hg38 = GRCh38 & TS ann. = Custom human 3'UTR annotation obtained from TargetScan8). To comprehensively compare scanMiR repression scores to TargetScan8 occupancy scores, we further included analyses considering either exclusively canonical sites ("can."), only sites in the 3'UTR ("utr") or a combination of both. The last three bars show the Pearson correlations of occupancy scores (for low and high abundant miRNAs as well as transfected miRNAs) provided in the latest TargetScan update (version 8) with the same measured mRNA logFC. All scanMiR repression predictions are calculated with the globally optimized a-value (see Fig. 3C).

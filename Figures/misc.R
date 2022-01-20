@@ -20,6 +20,7 @@ type_cols <- c("8mer" = "darkred","7mer-m8" = "#0596b0","7mer-a1" = "#117733",
 
 meth_cols2 <- c(`McGeary Lin` = darkblue, `McGeary opt. a` = darkblue, 
                 scanMiR = darkgreen, "scanMiR opt. a" = darkgreen, 
-                "scanMiR Global ag"= lightgreen, TargetScan = "grey55", 
-                other = light,'McGeary opt. a + pass.' = brown)
+                "scanMiR Global ag"= lightgreen, TargetScan7 = "grey55", 
+                other = light,'McGeary opt. a + pass.' = brown, 
+                `TargetScan8 Occ. (high)` = "#E55334",`TargetScan8 Occ. (low)` = "#AC3E27",`TargetScan8 Occ. (trans.)` = "#722A1A" )
 

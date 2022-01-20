@@ -1,0 +1,64 @@
+---
+title: "run_HEK"
+author: "Pierre-Luc Germain"
+date: "11/10/2020"
+output: html_document
+---
+
+
+
+```{r}
+suppressPackageStartupMessages({
+  library(Biostrings)
+  library(BiocParallel)
+  library(GenomicRanges)
+  library(ensembldb)
+  library(BSgenome.Hsapiens.UCSC.hg19)
+  library(scanMiRData)
+  library(scanMiR)
+})
+
+mods <- scanMiRData::getKdModels("hsa",NULL)
+mods <- mods[c("hsa-miR-122-5p",
+"hsa-miR-138-5p", "hsa-miR-145-5p", "hsa-miR-184", "hsa-miR-190a-5p", 
+"hsa-miR-200b-3p", "hsa-miR-216a-5p", "hsa-miR-217-5p", "hsa-miR-219a-5p", 
+"hsa-miR-375-3p", "hsa-miR-451a")]
+mods1 <- readRDS("mods_miR-133_McGeary.rds")
+mods2 <- KdModelList(mods,mods1)
+```
+
+
+# Download Targetscan annotation
+```{r}
+# tmp <- tempfile()
+# a <- download.file(
+#       "http://www.targetscan.org/vert_80/vert_80_data_download/TSHuman_7_hg19_3UTRs.gff.zip", tmp)
+```
+
+
+
+
+```{r}
+g <- rtracklayer::import.gff("./data/Targetscan_Annotation/TSHuman_7_hg19_3UTRs.gff")
+colnames(mcols(g))[5] <- "transcript_id"
+g <- as.list(split(g,strand(g)))
+g[["+"]] <- g[["+"]][order(start(g[["+"]]))]
+g[["-"]] <- g[["-"]][order(end(g[["-"]]),decreasing=TRUE)]
+g <- c(g[["+"]],g[["-"]])
+seqs <- extractTranscriptSeqs(BSgenome.Hsapiens.UCSC.hg19, split(g,g$transcript_id))
+```
+
+#all
+```{r}
+m <- findSeedMatches(seqs, mods2, maxLogKd=NULL, BP = MulticoreParam(12, progressbar=TRUE), p3.extra =TRUE, ret="GRanges")
+saveRDS(m, file="./data/hsa.12mirs.Targetscan.fullScan.GR.rds")
+```
+
+#can
+```{r}
+m2 <- findSeedMatches(seqs, mods2, maxLogKd=NULL, BP = MulticoreParam(12, progressbar=TRUE), p3.extra =TRUE, ret="GRanges",onlyCanonical = TRUE)
+saveRDS(m2, file="./data/hsa.12mirs.Targetscan.can.fullScan.GR.rds")
+```
+
+
+

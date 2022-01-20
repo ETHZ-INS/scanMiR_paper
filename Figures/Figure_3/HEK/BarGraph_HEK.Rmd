@@ -87,7 +87,7 @@ domnorm <- function(x, useMedian=FALSE){
 
 # aggregate all miRNAs using the given parameters
 aggAll <- function(m, params=c(), ags=NULL){
-  bp <- c(b=0.5735, c=-1.7091, p3=0, coef_utr = 0, coef_orf = 0)
+  bp <- c(b=0.5735, c=exp(-1.7091), p3=0, coef_utr = 0, coef_orf = 0)
   bp <- c(bp,ags)
   bp[names(params)] <- as.numeric(params)
   res <- bplapply(setNames(names(m),names(m)), BPPARAM=MulticoreParam(length(m)), FUN=function(x){
@@ -105,7 +105,7 @@ aggAll <- function(m, params=c(), ags=NULL){
 }
 
 getComparisonTable <- function(params=c(), ob, ags=NULL){
-  bp <- c(b=0.5735, c=-1.7091, p3=0, coef_utr = 0, coef_orf = 0)
+  bp <- c(b=0.5735, c=exp(-1.7091), p3=0, coef_utr = 0, coef_orf = 0)
   bp[names(params)] <- as.numeric(params)
   d <- aggAll(m, bp, ags = ags)
   colnames(ob) <- gsub("-",".",colnames(ob))
@@ -123,7 +123,6 @@ getComparisonTable <- function(params=c(), ob, ags=NULL){
 m <- readRDS(file = "../../../Parameter_Optimization/data/hsa.12mirs.HEK.fullScan.GR.rds")
 m$transcript <- as.factor(seqnames(m))
 m <- split(mcols(m), m$miRNA)
-names(m)[which(names(m) == "hsa-miR-133a-3p")] <- "hsa-miR-133-3p"
 
 ob <- domnorm(read.delim("../../../Parameter_Optimization/data/McGeary_2019_raw/GSE140218_HEK293FT_transfection_logtpm_batchnormalized.txt", row.names=1))
 colnames(ob) <- names(m) # unsafe - they just happen to match
@@ -139,6 +138,7 @@ aggAll_2 <- function(m, params=c(), ags=NULL){
   bp <- c(bp, ags)
   bp[names(params)] <- as.numeric(params)
   res <- bplapply(setNames(names(m),names(m)), BPPARAM=MulticoreParam(length(m)),
+    #lapply(setNames(names(m),names(m)),
                   FUN=function(x){
     if(!("ag" %in% names(bp)) && !is.null(bp[[x]])) bp[["ag"]] <- bp[[x]]
     x <- .aggregate_miRNA_2(m[[x]], ag=bp[["ag"]], b=bp[["b"]], c=bp[["c"]])
@@ -193,8 +193,8 @@ getComparisonTable_2 <- function(params=c(), ob, ags=NULL){
 # Data McGeary et al
 ```{r}
 # Get the Feature Files
-feature_files <- list.files("/mnt/schratt/scanMiR_paper_scripts/Parameter_Optimization/data/McGeary_2019_processed/HEK_Features_McGeary_Scan/", full.names = T)
-mirs_full <- gsub("\\.txt", "", list.files("/mnt/schratt/scanMiR_paper_scripts/Parameter_Optimization/data/McGeary_2019_processed/HEK_Features_McGeary_Scan/", full.names = F))
+feature_files <- list.files("/mnt/schratt/scanMiR_paper_scripts_old/Parameter_Optimization/data/McGeary_2019_processed/HEK_Features_McGeary_Scan/", full.names = T)
+mirs_full <- gsub("\\.txt", "", list.files("/mnt/schratt/scanMiR_paper_scripts_old/Parameter_Optimization/data/McGeary_2019_processed/HEK_Features_McGeary_Scan/", full.names = F))
 names(feature_files) <- mirs_full
 hek_mirs <- mirs_full[!grepl("pass", mirs_full)]
 
@@ -243,7 +243,7 @@ df3$type <- "McGeary Lin opt ags"
 
 
 # Get the Targetscan File
-df4 <- readRDS("../../../Targetscan_Corr/Run_Targetscan/Targetscan_corr_hek.rds")
+df4 <- readRDS("../../../Targetscan_Correlation/Run_Targetscan/Targetscan_corr_hek.rds")
 df4$type <- "Targetscan"
 df4$condition <- NULL
 colnames(df4)[2] <- "miRNA"

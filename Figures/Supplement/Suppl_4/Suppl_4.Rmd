@@ -1,25 +1,23 @@
 ---
-title: "Suppl. 2"
+title: "Suppl_2"
 author: "Michael Soutschek"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
-output:
-  pdf_document: default
-  html_document: default
+output: html_document
 ---
 
 
 ```{r, include=FALSE}
 if(!exists('FIG_NB')){
-  FIG_NB <- 0
+  FIG_NB <- 0; FIG_STRING <- "Supplementary Figure S"
   getFigNb <- function(increment=FALSE){
     if(increment) FIG_NB <<- FIG_NB + 1
-    FIG_NB
+    paste0(FIG_STRING,FIG_NB)
   }
 }
 knitr::opts_chunk$set(fig.width=8)
 ```
 
-# Fig `r getFigNb(TRUE)`
+# `r getFigNb(TRUE)`
 
 
 
@@ -27,98 +25,48 @@ knitr::opts_chunk$set(fig.width=8)
 suppressPackageStartupMessages({
   library(ggplot2)
   library(cowplot)
-  library(gridExtra)
-  library(scales)
-  library(GenomicRanges)
-  library(S4Vectors)
 })
 source("../../misc.R")
+
 ```
 
 
 ```{r, include=FALSE}
-# Cut off Corr
+df_a <- readRDS("../../../Add_Datasets/Amin/plot_df.rds")
+df_a$name <- "miR-218 ko (Amin et al., 2015)"
 
-df1 <- readRDS("./cut_off_corr/PlotDF.rds")
+# df_l <- readRDS("../../../Add_Datasets/Loeb/plot_df.rds")
+# df_l$name <- "miR-155 ko (Loeb et al., 2012)"
 
-p1 <- ggplot(df1, aes(x = cut_off, y = r2)) + 
-  geom_line(size = 1) +
-  theme_minimal() +
-  ylab(expression(~r^2)) +
-  xlab(bquote(~log(K[D])~"cut-off")) +
-  facet_grid(~mir) +
+df_e <- readRDS("../../../Add_Datasets/Eichhorn/plot_df.rds")
+df_e$name <- "miR-122 ko (Eichhorn et al., 2014)"
+
+df5 <- rbind(df_a,df_e)
+df5$tool[which(df5$tool == "TS7")] <- "TargetScan7" 
+df5$tool[which(df5$tool == "TS8_high")] <- "TargetScan8 Occ. (high)" 
+df5$tool[which(df5$tool == "TS8_low")] <- "TargetScan8 Occ. (low)" 
+df5$tool[which(df5$tool == "TS8_trans")] <- "TargetScan8 Occ. (trans.)" 
+
+p5 <- ggplot(df5, aes(x=log(log_ag), y=r2, color=tool)) +
+  geom_line(size=1.2) +
+  theme_minimal() + 
+  scale_color_manual(values = meth_cols2[df5$tool]) +
+  geom_vline(xintercept = -4.863126, linetype = "dashed", color = "grey42") + 
+  labs(x="log(a)", y=bquote("Correlation with observed repression"~(r^2)), color="Method") +
   theme(
                 panel.border =element_rect(color="black", fill=NA),
                 text = element_text(size=12),
                 legend.title = element_text(size = rel(0.9)),
                 legend.text = element_text(size = rel(0.8))
-  )
-
-
-# Table
-
-df2 <- readRDS("./cut_off_corr/Plot_Table_cut_df.rds")
-p2 <- tableGrob(df2, rows = NULL, theme=ttheme_default(base_size=10))
-
-# Pie Chart
-
-m <- readRDS(file = "../../../Parameter_Optimization/data/hsa.12mirs.HEK.fullScan.GR.rds")
-
-e <- as.data.frame(mcols(m))
-e$transcript <- as.factor(seqnames(m))
-
-cut_off <- nrow(e[e$log_kd > -300,])/nrow(e)
-rest <- 1 - nrow(e[e$log_kd > -300,])/nrow(e)
-
-df <- data.frame("cut" = cut_off , "rest" = rest)
-df <- data.frame(t(df))
-df$group <- c("Cut-off at -0.3","All other sites")
-
-
-blank_theme <- theme_minimal()+
-  theme(
-  axis.title.x = element_blank(),
-  axis.title.y = element_blank(),
-  panel.border = element_blank(),
-  panel.grid=element_blank(),
-  axis.ticks = element_blank(),
-  plot.title=element_text(size=14, face="bold"),
-  legend.title = element_blank(),
-  plot.margin = unit(c(0,2,0,1), "lines")
-  )
-
-pie <- ggplot(df, aes(x="", y=t.df., fill=group))+
-  geom_bar(width = 1, stat = "identity") + 
-  coord_polar("y", start=0) + 
-  scale_fill_manual(values = c("#4477AA","#CC6677")) +
-  blank_theme 
-
-pie <- pie + theme(axis.text.x=element_blank(), legend.position = "bottom") + 
-  geom_text(aes(y = t.df./2 + c(0, cumsum(t.df.)[-length(t.df.)]), 
-                label = percent(t.df./100)), size=5)
-
-
-#Speed Figure
-
-df4 <- readRDS("../../../Speed_Comparison/Speed_DF2.rds")
-
-p4 <- ggplot(df4,aes(x = Sequences, y = time, color = Algorithm)) + 
-  geom_line(aes(linetype = Condition)) + scale_x_log10() + 
-  ylab("Time (s)") + theme_classic() + scale_color_manual(values = meth_cols2, guide="none") + 
-  theme(plot.margin = unit(c(2,0.5,0,0), "lines"), legend.position = "bottom", legend.direction = "vertical")
+  ) + facet_wrap("name",ncol = 2)
 ```
 
-
-
-
-```{r, fig.width=9, fig.height=7}
-pp1 <- plot_grid(p2,pie,p4, labels = c("B","C","D"), nrow = 1, rel_widths=c(5,4,4))
-plot_grid(p1,pp1,labels = c("A",""), ncol = 1, rel_heights = c(4,5))
-#ggsave("Suppl_4.png",bg = "white",width = 9)
+```{r, fig.width=8, fig.height=5}
+p5
+#ggsave("Suppl_4.png",plot = p5, width = 10,height = 7,bg = "white")
 ```
-
 
 
 ### `r getFigNb()`
 
-**Computational optimizations in scanMiR. A:** Pearson correlation values of predicted and measured miRNA repression depending on different maximal $K_d$-values (“cutoff”). **B:** The maximum $log(K_d)$ cutoff for the 12 miRNAs used in HEK-transfection experiments (McGeary et al., 2019)  by which the correlation diminishes by only 2.5% or 1%, respectively. For individual miRNAs, there were large variations in the cutoff beyond which the addition of binding sites with a lower affinity did not substantially improve the correlation between predicted and observed repression. **C:** Applying a $log(K_d)$ cutoff of -0.3 reduces the number of binding sites by 39%, as shown for the scans of the aforementioned 12 miRNAs on HEK-cell transcripts. **D:** Run times of the scanning algorithm of McGeary et al. (2019) with and without folding of the transcripts.
+**ScanMiR repression predictions outperform TargetScan predictions in different mouse miRNA knockout datasets.** Plots displaying the variance explained ($r^2$) of scanMiR and TargetScan repression predictions with mRNA logFC obtained by RNA-sequencing upon knockout of miR-122 (Eichhorn et al., 2014) or miR-218 (Amin et al., 2015). TargetScan8 provides predicted miRNA occupancy scores for highly & lowly expressed miRNAs as well as for transfected (=trans.) miRNAs, whereas TargetScan7 results are based on the context++ score. In the miR-218 panel, only one occupancy score is depicted since the other two are at the same level. The globally optimized log(a)-value used by default in scanMiR is indicated with a dashed grey line.

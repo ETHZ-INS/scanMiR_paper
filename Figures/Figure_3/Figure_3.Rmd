@@ -31,7 +31,7 @@ suppressPackageStartupMessages({
 #colors
 ```{r}
 source("../misc.R")
-names(meth_cols2)[c(1,2,4,5,6)] <- c("McGeary et al.","McGeary et al.\nopt. a", "scanMiR\noptimal a", "scanMiR\nglobal a", "TargetScan")
+names(meth_cols2)[c(1,2,4,5,6)] <- c("McGeary et al.","McGeary et al.\nopt. a", "scanMiR\noptimal a", "scanMiR\nglobal a", "TargetScan7")
 ```
 
 
@@ -81,14 +81,14 @@ p2 <- ggplot(df2, aes(miRNA, r2, fill = type)) +
   scale_fill_manual(values=meth_cols2[df2$type]) + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "top") +
   #ggtitle("Correlations of RBNS Mirs") + 
-  labs(x="", y="Correlation with observed\nrepression (r^2)")
+  labs(x="", y=bquote("Correlation with observed repression"~(r^2)))
 ```
 
 
 #p3
 ```{r}
 df3 <- readRDS("./HEK/BarGraph_DF.rds")
-newlvls <- c("McGeary et al.\nopt. a", "scanMiR\noptimal a", "scanMiR\nglobal a", "TargetScan")
+newlvls <- c("McGeary et al.\nopt. a", "scanMiR\noptimal a", "scanMiR\nglobal a", "TargetScan7")
 levels(df3$type) <- newlvls
 p3 <- ggplot(df3, aes(miRNA, r2, fill = type)) + 
   geom_col(position="dodge") + labs(fill="method") +
@@ -96,7 +96,7 @@ p3 <- ggplot(df3, aes(miRNA, r2, fill = type)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1), 
         legend.position = "top", legend.title = element_blank()) +
   #ggtitle("Correlations of HEK-transfection datasets") + 
-  labs(x="", y="Correlation with observed\nrepression (r^2)")
+  labs(x="", y=bquote("Correlation with observed repression"~(r^2)))
 ```
 
 
@@ -106,7 +106,7 @@ df4 <- readRDS("../../Speed_Comparison/Speed_DF1.rds")
 df4$multithreading <- factor(df4$type2, unique(df4$type2))
 levels(df4$multithreading) <- c("single","12-cores")
 df4$Algorithm <- gsub("Lin","et al.",df4$Algorithm)
-df4$Algorithm <- gsub("Targetscan","TargetScan",df4$Algorithm)
+df4$Algorithm <- gsub("Targetscan","TargetScan7",df4$Algorithm)
 sp <- readRDS("../../Speed_Comparison/scanMiR/props.rds")
 #sapply(sp, FUN=function(x) sum(x$widths))
 

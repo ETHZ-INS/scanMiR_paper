@@ -1,0 +1,324 @@
+---
+title: "BarGraph_orig"
+author: "Michael Soutschek"
+date: "9 3 2021"
+output: html_document
+---
+
+
+
+```{r}
+suppressPackageStartupMessages({
+  library(Biostrings)
+  library(ggplot2)
+  library(BiocParallel)
+  library(GenomicRanges)
+  library(ensembldb)
+  library(ggsci)
+  library(data.table)
+  library(scanMiR)
+  library(viridis)
+  library(RColorBrewer)
+})
+```
+
+
+
+
+```{r fns}
+domnorm <- function(x, useMedian=FALSE){
+  y <- setNames(seq_len(ncol(x)), colnames(x))
+  if(useMedian){
+    x <- as.data.frame(lapply(y, FUN=function(i){
+      x[,i]-matrixStats::rowMedians(as.matrix(x[,-i]))
+    }), row.names=row.names(x))
+  }else{
+    x <- as.data.frame(lapply(y, FUN=function(i) x[,i]-rowMeans(x[,-i])), row.names=row.names(x))
+  }  
+  x
+}
+
+.aggregate_miRNA <- function(m, ll = NULL, a=-4.863126, b=0.5735, c=0.1810,
+                             p3=0.051, coef_utr = -0.17106,
+                             coef_orf = -0.21546, p3.range=c(3L,8L),
+                             toInt=FALSE){
+  m <- as.data.table(m)
+  for(col in c("ORF", "p3.score", "type")) if(is.null(m[[col]])) m[[col]] <- 0L
+  m[, ORF:=as.integer(ORF)]
+  m[, log_kd:=-log_kd/1000]
+  m <- m[log_kd>0]
+  m$p3.score <- ifelse(m$type == "non-canonical" , 0L, m$p3.score)
+  m$p3.score[m$p3.score>max(p3.range)] <- as.integer(max(p3.range))
+  m$p3.score[m$p3.score<min(p3.range)] <- 0L
+  m$N <- 1 / (1 + exp(-1 * (a + m$log_kd + log(c)*m$ORF + p3*m$p3.score) ))
+  m$log_kd <- NULL
+  m$N_bg <- 1 / (1 + exp(-1 * (a  + log(c)*m$ORF) ))
+  m <- as.data.frame(rowsum(as.matrix(m[,c("N","N_bg")]), group=m$transcript))
+  m <- data.frame( transcript=as.factor(row.names(m)),
+                   repression=log2(1+exp(b)*m$N_bg) - log2(1 + exp(b)*m$N))
+  if(!is.null(ll) && nrow(m) > 1){
+    m <- merge(m,ll,by = "transcript", all.x = TRUE)
+
+    # get the utr score
+    m$utr.length <- log10(m$utr.length)
+    m$utr.length[is.infinite(m$utr.length) | is.na(m$utr.length)] <- 0
+    qu_un <- m[!duplicated(m$transcript),"utr.length"]
+    qu <- quantile(qu_un, probs = c(0.05,0.95), na.rm = TRUE)
+    m$utr_score <- (m$utr.length - qu[1]) / (qu[2] - qu[1])
+    m$utr_score[is.na(m$utr_score)] <- 0
+
+    # get the orf score
+    if(sum(m$orf.length, na.rm = TRUE) > 0){
+      m$orf.length <- log10(m$orf.length)
+      m$orf.length[is.infinite(m$orf.length) | is.na(m$orf.length)] <- 0
+      qu_un <- m[!duplicated(m$transcript),"orf.length"]
+      qu <- quantile(qu_un, probs = c(0.05,0.95), na.rm = TRUE)
+      m$orf_score <- (m$orf.length - qu[1]) / (qu[2] - qu[1])
+      m$orf_score[is.na(m$orf_score)] <- 0
+    }else{
+      m$orf_score <- 0
+    }
+  m$repression <- m$repression + coef_utr*m$utr_score*m$repression +
+    coef_orf*m$orf_score*m$repression
+  m <- subset(m, select = - c(orf.length,utr.length,utr_score,orf_score))
+  }
+  if(toInt) m$repression <- as.integer(round(1000*m$repression))
+  m$repression <- ifelse(m$repression >= 0, 0, m$repression)
+  m
+}
+
+# aggregate all miRNAs using the given parameters
+aggAll <- function(m, params=c(), ags=NULL){
+  bp <- c(b=0.5735, c=exp(-1.7091), p3=0, coef_utr = 0, coef_orf = 0)
+  bp <- c(bp,ags)
+  bp[names(params)] <- as.numeric(params)
+  res <- bplapply(setNames(names(m),names(m)), BPPARAM=MulticoreParam(length(m)), FUN=function(x){
+    if(!("a" %in% names(bp)) && !is.null(bp[[x]])) bp[["a"]] <- bp[[x]]
+    x <- .aggregate_miRNA(m[[x]], a=bp[["a"]], b=bp[["b"]], c=bp[["c"]], p3=bp[["p3"]], coef_utr=bp[["coef_utr"]],coef_orf = bp[["coef_orf"]], toInt = FALSE)
+    y <- x$repression
+    names(y) <- x$transcript
+    y
+  })
+  txs <- unique(unlist(lapply(res, FUN=names)))
+  x <- sapply(res, FUN=function(x) x[txs])
+  row.names(x) <- txs
+  x[is.na(x)] <- 0
+  domnorm(x)
+}
+
+getComparisonTable <- function(params=c(), ob, ags=NULL){
+  bp <- c(b=0.5735, c=exp(-1.7091), p3=0, coef_utr = 0, coef_orf = 0)
+  bp[names(params)] <- as.numeric(params)
+  d <- aggAll(m, bp, ags = ags)
+  colnames(ob) <- gsub("-",".",colnames(ob))
+  d <- as.matrix(d[row.names(ob),colnames(ob)])
+  d[is.na(d)] <- 0
+  d <- reshape2::melt(d, varnames=c("transcript","miRNA"), value.name="predicted")
+  d$observed <- reshape2::melt(as.matrix(ob))[,"value"]
+  d
+}
+```
+
+## Data hek
+```{r}
+m_hek <- readRDS(file = "../../Parameter_Optimization/data/hsa.12mirs.HEK.fullScan.GR.rds")
+m_hek$transcript <- as.factor(seqnames(m_hek))
+m_hek <- split(mcols(m_hek), m_hek$miRNA)
+```
+
+
+## Data hg19
+```{r}
+m_hg19 <- readRDS(file = "../../Parameter_Optimization/data/hsa.12mirs.hg19.fullScan.GR.rds")
+m_hg19$transcript <- as.factor(seqnames(m_hg19))
+m_hg19 <- split(mcols(m_hg19), m_hg19$miRNA)
+
+m_hg19_utr <- readRDS(file = "../../Parameter_Optimization/data/hsa.12mirs.hg19.UTR.fullScan.GR.rds")
+m_hg19_utr$transcript <- as.factor(seqnames(m_hg19_utr))
+m_hg19_utr <- split(mcols(m_hg19_utr), m_hg19_utr$miRNA)
+
+m_hg19_utr.can <- readRDS(file = "../../Parameter_Optimization/data/hsa.12mirs.hg19.UTRcan.fullScan.GR.rds")
+m_hg19_utr.can$transcript <- as.factor(seqnames(m_hg19_utr.can))
+m_hg19_utr.can <- split(mcols(m_hg19_utr.can), m_hg19_utr.can$miRNA)
+
+m_hg19.can <- readRDS(file = "../../Parameter_Optimization/data/hsa.12mirs.hg19.can.fullScan.GR.rds")
+m_hg19.can$transcript <- as.factor(seqnames(m_hg19.can))
+m_hg19.can <- split(mcols(m_hg19.can), m_hg19.can$miRNA)
+```
+
+
+## Data hg38
+```{r}
+m_hg38 <- readRDS(file = "../../Parameter_Optimization/data/hsa.12mirs.hg38.fullScan.GR.rds")
+m_hg38$transcript <- as.factor(seqnames(m_hg38))
+m_hg38 <- split(mcols(m_hg38), m_hg38$miRNA)
+
+m_hg38_utr <- readRDS(file = "../../Parameter_Optimization/data/hsa.12mirs.hg38.UTR.fullScan.GR.rds")
+m_hg38_utr$transcript <- as.factor(seqnames(m_hg38_utr))
+m_hg38_utr <- split(mcols(m_hg38_utr), m_hg38_utr$miRNA)
+
+m_hg38_utr.can <- readRDS(file = "../../Parameter_Optimization/data/hsa.12mirs.hg38.UTRcan.fullScan.GR.rds")
+m_hg38_utr.can$transcript <- as.factor(seqnames(m_hg38_utr.can))
+m_hg38_utr.can <- split(mcols(m_hg38_utr.can), m_hg38_utr.can$miRNA)
+
+m_hg38.can <- readRDS(file = "../../Parameter_Optimization/data/hsa.12mirs.hg38.can.fullScan.GR.rds")
+m_hg38.can$transcript <- as.factor(seqnames(m_hg38.can))
+m_hg38.can <- split(mcols(m_hg38.can), m_hg38.can$miRNA)
+```
+
+
+## Data Targetscan
+```{r}
+m_tar <- readRDS(file = "../../Parameter_Optimization/data/hsa.12mirs.Targetscan.fullScan.GR.rds")
+m_tar$transcript <- as.factor(seqnames(m_tar))
+m_tar$transcript <- gsub("\\..*","",m_tar$transcript)
+m_tar  <- split(mcols(m_tar), m_tar$miRNA)
+
+m_tar.can <- readRDS(file = "../../Parameter_Optimization/data/hsa.12mirs.Targetscan.can.fullScan.GR.rds")
+m_tar.can$transcript <- as.factor(seqnames(m_tar.can))
+m_tar.can$transcript <- gsub("\\..*","",m_tar.can$transcript)
+m_tar.can  <- split(mcols(m_tar.can), m_tar.can$miRNA)
+```
+
+
+
+```{r}
+ob <- domnorm(read.delim("../../Parameter_Optimization/data/McGeary_2019_raw/GSE140218_HEK293FT_transfection_logtpm_batchnormalized.txt", row.names=1))
+row.names(ob) <- gsub("\\..*","",row.names(ob))
+colnames(ob) <- names(m_hg38) # unsafe - they just happen to match
+```
+
+
+# Compare the values
+```{r}
+#op1 <- readRDS("../../../Parameter_Optimization/ag_HEK/opt_ags_us_fitted.rds")
+op2 <- readRDS("../../Parameter_Optimization/ag_HEK/opt_global_ag_hek.rds")
+names(op2$par) <- "a"
+
+#hek annotation
+m <- m_hek
+d0 <- getComparisonTable(op2$par,ob)
+cors0 <- sapply(split(d0, d0$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+
+# Glob ag hg19
+m <- m_hg19
+d1 <- getComparisonTable(op2$par,ob)
+cors1 <- sapply(split(d1, d1$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+
+# Glob ag hg38
+m <- m_hg38
+d2 <- getComparisonTable(op2$par,ob)
+cors2 <- sapply(split(d2, d2$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+
+# Glob ag hg19 UTR
+m <- m_hg19_utr
+d3 <- getComparisonTable(op2$par,ob)
+cors3 <- sapply(split(d3, d3$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+
+# Glob ag hg38 UTR
+m <- m_hg38_utr
+d4 <- getComparisonTable(op2$par,ob)
+cors4 <- sapply(split(d4, d4$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+
+# Glob ag hg19 UTR can
+m <- m_hg19_utr.can
+d5 <- getComparisonTable(op2$par,ob)
+cors5 <- sapply(split(d5, d5$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+
+# Glob ag hg38 UTR can
+m <- m_hg38_utr.can
+d6 <- getComparisonTable(op2$par,ob)
+cors6 <- sapply(split(d6, d6$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+
+# Glob ag hg19 can
+m <- m_hg19.can
+d7 <- getComparisonTable(op2$par,ob)
+cors7 <- sapply(split(d7, d7$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+
+# Glob ag hg38 can
+m <- m_hg38.can
+d8 <- getComparisonTable(op2$par,ob)
+cors8 <- sapply(split(d8, d8$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+
+# Glob ag Targetscan anno
+m <- m_tar
+d9 <- getComparisonTable(op2$par,ob)
+cors9 <- sapply(split(d9, d9$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+
+# Glob ag Targetscan anno can
+m <- m_tar.can
+d10 <- getComparisonTable(op2$par,ob)
+cors10 <- sapply(split(d10, d10$miRNA), FUN=function(x) cor(x$observed,x$predicted)^2)
+
+# get the df
+df0 <- data.frame(miRNA=names(cors0), r2=cors0)
+df0$type <- "scanMiR hek"
+
+df1 <- data.frame(miRNA=names(cors1), r2=cors1)
+df1$type <- "scanMiR hg19"
+
+df2 <- data.frame(miRNA=names(cors2), r2=cors2)
+df2$type <- "scanMiR hg38"
+
+df3 <- data.frame(miRNA=names(cors3), r2=cors3)
+df3$type <- "scanMiR hg19 utr"
+
+df4 <- data.frame(miRNA=names(cors4), r2=cors4)
+df4$type <- "scanMiR hg38 utr"
+
+df5 <- data.frame(miRNA=names(cors5), r2=cors5)
+df5$type <- "scanMiR hg19 utr can."
+
+df6 <- data.frame(miRNA=names(cors6), r2=cors6)
+df6$type <- "scanMiR hg38 utr can."
+
+df7 <- data.frame(miRNA=names(cors7), r2=cors7)
+df7$type <- "scanMiR hg19 can."
+
+df8 <- data.frame(miRNA=names(cors8), r2=cors8)
+df8$type <- "scanMiR hg38 can."
+
+df9 <- data.frame(miRNA=names(cors9), r2=cors9)
+df9$type <- "scanMiR TS ann."
+
+df10 <- data.frame(miRNA=names(cors10), r2=cors10)
+df10$type <- "scanMiR TS ann. can."
+
+# Get the Targetscan File
+dft <- readRDS("./Targetscan8_corr_hek.rds")
+dft$type <- dft$condition
+dft$condition <- NULL
+colnames(dft)[2] <- "miRNA"
+
+
+
+
+df <- rbind(df0,df1,df2,df3,df4,df5,df6,df7,df8,df9,df10,dft)
+df$miRNA <- gsub("hsa.","",df$miRNA)
+df$miRNA <- gsub(".5p","",df$miRNA)
+df$miRNA <- gsub(".3p","",df$miRNA)
+df$miRNA <- gsub("-",".",df$miRNA)
+df$miRNA <- gsub("133a.1","133",df$miRNA)
+
+df$type = factor(df$type,levels = c("scanMiR hek","scanMiR hg19","scanMiR hg38","scanMiR TS ann.",
+                                    "scanMiR hg19 can.","scanMiR hg38 can.", 
+                                    "scanMiR hg19 utr","scanMiR hg38 utr",
+                                    "scanMiR hg19 utr can.","scanMiR hg38 utr can.", "scanMiR TS ann. can.",
+                                    "TS8 low ab. miR Occ.","TS8 high ab. miR Occ.","TS8 transfected miR Occ."))
+
+#save
+saveRDS(df,"BarGraph_DF_HEK_revision.rds")
+
+ggplot(df, aes(miRNA, r2, fill = type)) + 
+  geom_col(position="dodge") +
+  theme_bw() +
+  scale_fill_viridis_d(alpha = 0.8)
+
+ggsave("bar_graph_HEK_revision.png",height = 6,width = 12)
+```
+
+
+
+
+
+

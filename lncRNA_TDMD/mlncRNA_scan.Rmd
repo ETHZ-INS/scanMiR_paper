@@ -1,0 +1,74 @@
+---
+title: "hlncRNA_scan"
+author: "Michael Soutschek"
+date: "26 2 2021"
+output: html_document
+---
+
+
+```{r}
+suppressPackageStartupMessages({
+  library(scanMiR)
+  library(scanMiRData)
+  library(ensembldb)
+  library(AnnotationHub)
+  library(BSgenome)
+  library(BiocParallel)
+})
+```
+
+
+
+# Get lncRNA sequences
+```{r}
+# Prepare
+ah <- AnnotationHub()
+genome <- BSgenome.Mmusculus.UCSC.mm10::BSgenome.Mmusculus.UCSC.mm10
+ahid <- rev(query(ah, c("EnsDb", "GRCm38"))$ah_id)[1]
+ensdb <- ah[[ahid]]
+seqlevelsStyle(genome) <- "Ensembl"
+
+# restrict to canonical chromosomes
+canonical_chroms <- seqlevels(genome)[!grepl('_', seqlevels(genome))]
+
+# Get Sequences
+filt <- SeqNameFilter(canonical_chroms)
+## listTxbiotypes(ensdb)
+grl_lncRNA <- ensembldb::exonsBy(ensdb, by = "tx", filter = ~ tx_biotype == "lincRNA" & filt)
+seqs_lncRNA <- extractTranscriptSeqs(genome,grl_lncRNA )
+
+# Get Info
+info <- data.frame(strand=unlist(unique(strand(grl_lncRNA))))
+lncRNA.len <- lengths(seqs_lncRNA)
+info$lncRNA.length <- lncRNA.len[row.names(info)]
+mcols(seqs_lncRNA)$lncRNA.length <- lncRNA.len[names(seqs_lncRNA)]
+```
+
+# Get mods
+```{r}
+#load tdmd mirs
+mir_tdmd <- read_excel("../Add_Datasets/Shi/Shi_et_al_Supp_abc9359-Data-S2.xlsx", 
+    sheet = "D. Induced mouse neurons", skip = 1)
+mir_tdmd <- mir_tdmd[!is.na(mir_tdmd$p_adj),]
+mir_tdmd_sig <- mir_tdmd[mir_tdmd$p_adj < 10e-5,"miRNA", drop = TRUE]
+
+mirs <- paste0("mmu-",mir_tdmd_sig)
+
+mods <- scanMiRData::getKdModels("mmu",NULL)
+mods_tdmd <- mods[mirs]
+```
+
+
+# Scan
+```{r}
+m <- findSeedMatches(seqs_lncRNA, mods_tdmd, shadow=0L,ret = "GRanges",p3.extra = TRUE, BP=MulticoreParam(8, progress=TRUE), keepMatchSeq = TRUE)
+```
+
+
+# Filter for TDMD sites
+```{r}
+m_TDMD <- m[m$note == "TDMD?"]
+m_TDMD@elementMetadata$sequence <- NULL
+saveRDS(m_TDMD,"mouse_lncRNAs_tdmd_miRNAs_TDMD.rds")
+```
+

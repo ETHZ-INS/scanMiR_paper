@@ -22,7 +22,7 @@ suppressPackageStartupMessages({
 
 ```{r}
 get_r2 <- function(log_ag, m, dea, column, p3=0){
-  m_agg <- scanMiR:::.aggregate_miRNA(m,ag = log_ag,p3 = p3,coef_orf = 0,coef_utr = 0)
+  m_agg <- scanMiR:::.aggregate_miRNA(m,a = log_ag,p3 = p3,coef_orf = 0,coef_utr = 0)
   dea <- dea[c("Transcript.ID", column)]
   names(dea) <- c("Transcript.ID", "logFC")
   m_merged <- merge(m_agg, dea, by.x = "transcript", by.y = "Transcript.ID", all.y=TRUE)
@@ -116,29 +116,34 @@ if(file.exists("mmu_agg_full_matches_122_5p.rds")){
 ```
 
 
-# Get Targetscan results
+
+
+# Get Targetscan8 results
 ```{r}
-if(file.exists("Targetscan_all_122_5p.rds")){
-  TS_122_m <- readRDS("Targetscan_all_122_5p.rds")
+if(file.exists("Targetscan8_all_122_5p.rds")){
+  TS_122_m <- readRDS("Targetscan8_all_122_5p.rds")
 } else {
-  TS <- fread("../Amin_clean/Summary_Counts.txt")
+  TS <- fread("../Amin/Summary_Counts.all_predictions.txt")
   TS$sites <- TS[["Total num conserved sites"]]+TS[["Total num nonconserved sites"]]
-  fam <- fread("../Amin_clean/miR_Family_Info.txt")
+  fam <- fread("../Amin/miR_Family_Info.txt")
   fam_122 <- fam[fam$`MiRBase ID` == "mmu-miR-122-5p",]
   TS_122 <- TS[TS$`miRNA family` == fam_122$`Seed+m8`,]
   TS_122_m <- TS_122[grep("mmu-",TS_122$`Representative miRNA`),]
   TS_122_m$score <- TS_122_m$`Total context++ score`
+  TS_122_m$occ_high <- TS_122_m$`Predicted occupancy - high miRNA`
+  TS_122_m$occ_low <- TS_122_m$`Predicted occupancy - low miRNA`
+  TS_122_m$occ_trans <- TS_122_m$`Predicted occupancy - transfected miRNA`
   TS_122_m$Transcript.ID <- gsub("\\..*","",TS_122_m$`Transcript ID`)
-  saveRDS(TS_122_m,"Targetscan_all_122_5p.rds")
+  saveRDS(TS_122_m,"Targetscan8_all_122_5p.rds")
 }
 
 
-if(file.exists("Targetscan_Gene_Info.rds")){
-  TS_gene_info <- readRDS("Targetscan_Gene_Info.rds")
+if(file.exists("Targetscan8_Gene_Info.rds")){
+  TS_gene_info <- readRDS("Targetscan8_Gene_Info.rds")
 } else {
   tmp <- tempfile()
   download.file(
-          "http://www.targetscan.org/mmu_72/mmu_72_data_download/Gene_info.txt.zip", tmp)
+          "http://www.targetscan.org/mmu_80/mmu_80_data_download/Gene_info.txt.zip", tmp)
   TS_gene_info <- fread(unzip(file.path(tmp)))
   TS_gene_info <- as.data.frame(TS_gene_info)
   TS_gene_info <- TS_gene_info[TS_gene_info$`Representative transcript?` == "1",]
@@ -155,8 +160,53 @@ if(file.exists("Targetscan_Gene_Info.rds")){
   TS_info <- rbind(TS_red,TS_add)
   TS_info$`Transcript.ID` <- gsub("\\..*","",TS_info$`Transcript ID`)
   TS_gene_info <- TS_info
-  saveRDS(TS_gene_info,"Targetscan_Gene_Info.rds")
+  saveRDS(TS_gene_info,"Targetscan8_Gene_Info.rds")
 }
+```
+
+
+
+# Get Targetscan7 results
+```{r}
+# if(file.exists("Targetscan_all_122_5p.rds")){
+#   TS_122_m <- readRDS("Targetscan_all_122_5p.rds")
+# } else {
+#   TS <- fread("../Amin_clean/Summary_Counts.txt")
+#   TS$sites <- TS[["Total num conserved sites"]]+TS[["Total num nonconserved sites"]]
+#   fam <- fread("../Amin_clean/miR_Family_Info.txt")
+#   fam_122 <- fam[fam$`MiRBase ID` == "mmu-miR-122-5p",]
+#   TS_122 <- TS[TS$`miRNA family` == fam_122$`Seed+m8`,]
+#   TS_122_m <- TS_122[grep("mmu-",TS_122$`Representative miRNA`),]
+#   TS_122_m$score <- TS_122_m$`Total context++ score`
+#   TS_122_m$Transcript.ID <- gsub("\\..*","",TS_122_m$`Transcript ID`)
+#   saveRDS(TS_122_m,"Targetscan_all_122_5p.rds")
+# }
+# 
+# 
+# if(file.exists("Targetscan_Gene_Info.rds")){
+#   TS_gene_info <- readRDS("Targetscan_Gene_Info.rds")
+# } else {
+#   tmp <- tempfile()
+#   download.file(
+#           "http://www.targetscan.org/mmu_72/mmu_72_data_download/Gene_info.txt.zip", tmp)
+#   TS_gene_info <- fread(unzip(file.path(tmp)))
+#   TS_gene_info <- as.data.frame(TS_gene_info)
+#   TS_gene_info <- TS_gene_info[TS_gene_info$`Representative transcript?` == "1",]
+#   TS_gene_info <- TS_gene_info[TS_gene_info$`3P-seq tags` >= 5,]
+#   dupl <- TS_gene_info[which(duplicated(TS_gene_info$`Gene symbol`)),"Gene symbol"]
+#   dupl_ex <- character()
+#   for(i in dupl){
+#     df <- TS_gene_info[TS_gene_info$`Gene symbol` == i,]
+#     df <- df[order(df$`3P-seq tags`,decreasing = TRUE),]
+#     dupl_ex[i] <- df[1,"Transcript ID"]
+#   }
+#   TS_add <- TS_gene_info[TS_gene_info$`Transcript ID` %in% dupl_ex,]
+#   TS_red <- TS_gene_info[!TS_gene_info$`Gene symbol` %in% dupl,]
+#   TS_info <- rbind(TS_red,TS_add)
+#   TS_info$`Transcript.ID` <- gsub("\\..*","",TS_info$`Transcript ID`)
+#   TS_gene_info <- TS_info
+#   saveRDS(TS_gene_info,"Targetscan_Gene_Info.rds")
+# }
 ```
 
 
@@ -185,7 +235,7 @@ eichhorn_logFC_filt_tx <- merge(eichhorn_logFC, tx2gene, by="Transcript.ID") %>%
 if(file.exists("plot_df.rds")){
   df <- readRDS("plot_df.rds")
 } else {
-log_ag_vec <- seq(-8, 0, 0.5)
+log_ag_vec <- exp(seq(-8, 0, 0.5))
 mir = "mmu-miR-122-5p"
 
 
@@ -199,13 +249,30 @@ df <- get_r2_df(m,eichhorn_logFC_filt_tx,mir = mir,tool = "scanMiR",type = "tx_f
 
 # Get Targetscan Corr.
 TS_122_m <- as.data.frame(TS_122_m)
-merged_TS_tx <- merge(eichhorn_logFC_filt_tx[c("Transcript.ID", "logFC")], TS_122_m[c("Transcript.ID", "score")], by="Transcript.ID", all.x = TRUE)
-merged_TS_tx$score[is.na(merged_TS_tx$score)] <- 0
+merged_TS_tx <- merge(eichhorn_logFC_filt_tx[c("Transcript.ID", "logFC")], TS_122_m[c("Transcript.ID", "score","occ_high","occ_low","occ_trans")], by="Transcript.ID", all.x = TRUE)
+
+merged_TS_tx[is.na(merged_TS_tx)] <- 0
 merged_TS_tx$score[merged_TS_tx$score == "NULL"] <- 0
+merged_TS_tx$occ_high[merged_TS_tx$occ_high == "NULL"] <- 0
+merged_TS_tx$occ_low[merged_TS_tx$occ_low == "NULL"] <- 0
+merged_TS_tx$occ_trans[merged_TS_tx$occ_trans == "NULL"] <- 0
+
 merged_TS_tx$score <- as.numeric(merged_TS_tx$score)
-r2_TS_tx <- cor(merged_TS_tx[["logFC"]], merged_TS_tx[["score"]])^2
-df_TS_tx <- data.frame(log_ag = log_ag_vec, r2=r2_TS_tx, tool="TS", type = "tx_filter", level = "transcript", p3=0,mir = mir)
-df <- rbind(df, df_TS_tx)
+merged_TS_tx$occ_high <- as.numeric(merged_TS_tx$occ_high)
+merged_TS_tx$occ_low <- as.numeric(merged_TS_tx$occ_low)
+merged_TS_tx$occ_trans <- as.numeric(merged_TS_tx$occ_trans)
+
+r2_TS7_tx <- cor(merged_TS_tx[["logFC"]], merged_TS_tx[["score"]])^2
+r2_TS8_high_tx <- cor(merged_TS_tx[["logFC"]], merged_TS_tx[["occ_high"]])^2
+r2_TS8_low_tx <- cor(merged_TS_tx[["logFC"]], merged_TS_tx[["occ_low"]])^2
+r2_TS8_trans_tx <- cor(merged_TS_tx[["logFC"]], merged_TS_tx[["occ_trans"]])^2
+
+df_TS7_tx <- data.frame(log_ag = log_ag_vec, r2=r2_TS7_tx, tool="TS7", type = "tx_filter", level = "transcript", p3=0,mir = mir)
+df_TS8_high_tx <- data.frame(log_ag = log_ag_vec, r2=r2_TS8_high_tx, tool="TS8_high", type = "tx_filter", level = "transcript", p3=0,mir = mir)
+df_TS8_low_tx <- data.frame(log_ag = log_ag_vec, r2=r2_TS8_low_tx, tool="TS8_low", type = "tx_filter", level = "transcript", p3=0,mir = mir)
+df_TS8_trans_tx <- data.frame(log_ag = log_ag_vec, r2=r2_TS8_trans_tx, tool="TS8_trans", type = "tx_filter", level = "transcript", p3=0,mir = mir)
+
+df <- rbind(df, df_TS7_tx,df_TS8_high_tx,df_TS8_low_tx,df_TS8_trans_tx)
 saveRDS(df,"plot_df.rds")
 }
 
@@ -217,7 +284,7 @@ saveRDS(df,"plot_df.rds")
 
 
 ```{r}
-ggplot(df, aes(x=log_ag, y=r2, color=tool)) +
+ggplot(df, aes(x=log(log_ag), y=r2, color=tool)) +
   geom_line() +
   theme_bw() + 
   scale_color_nejm() +

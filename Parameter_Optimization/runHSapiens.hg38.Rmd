@@ -1,0 +1,71 @@
+---
+title: "run_HEK"
+author: "Pierre-Luc Germain"
+date: "11/10/2020"
+output: html_document
+---
+
+
+
+```{r}
+suppressPackageStartupMessages({
+  library(Biostrings)
+  library(BiocParallel)
+  library(GenomicRanges)
+  library(ensembldb)
+  library(BSgenome.Hsapiens.UCSC.hg38)
+  library(scanMiRData)
+  library(scanMiR)
+  library(scanMiRApp)
+  library(AnnotationHub)
+})
+
+
+#prepare mods
+mods <- scanMiRData::getKdModels("hsa",NULL)
+mods <- mods[c("hsa-miR-122-5p",
+"hsa-miR-138-5p", "hsa-miR-145-5p", "hsa-miR-184", "hsa-miR-190a-5p", 
+"hsa-miR-200b-3p", "hsa-miR-216a-5p", "hsa-miR-217-5p", "hsa-miR-219a-5p", 
+"hsa-miR-375-3p", "hsa-miR-451a")]
+mods1 <- readRDS("mods_miR-133_McGeary.rds")
+mods2 <- KdModelList(mods,mods1)
+
+#prepare sequences
+ah <- AnnotationHub()
+ensdb <- ah[[rev(query(ah, c("EnsDb", "GRCh38"))$ah_id)[1]]]
+anno <- ScanMiRAnno(species = NULL, genome = BSgenome.Hsapiens.UCSC.hg38, ensdb = ensdb)
+
+ob <- read.delim("./data/McGeary_2019_raw/GSE140218_HEK293FT_transfection_logtpm_batchnormalized.txt", row.names=1)
+```
+
+```{r}
+seqs <- getTranscriptSequence(tx = row.names(ob), annotation = anno,extract = "withORF")
+
+
+m <- findSeedMatches(seqs, mods2, maxLogKd=NULL, BP = MulticoreParam(12, progressbar=TRUE), p3.extra =TRUE, ret="GRanges")
+saveRDS(m, file="./data/hsa.12mirs.hg38.fullScan.GR.rds")
+```
+
+
+#only UTR
+```{r}
+seqs2 <- getTranscriptSequence(tx = row.names(ob), annotation = anno,extract = "UTRonly")
+
+
+m2 <- findSeedMatches(seqs2, mods2, maxLogKd=NULL, BP = MulticoreParam(12, progressbar=TRUE), p3.extra =TRUE, ret="GRanges")
+saveRDS(m2, file="./data/hsa.12mirs.hg38.UTR.fullScan.GR.rds")
+```
+
+
+#only UTR canonical
+```{r}
+m3 <- findSeedMatches(seqs2, mods2, maxLogKd=NULL, BP = MulticoreParam(12, progressbar=TRUE), p3.extra =TRUE, ret="GRanges", onlyCanonical = TRUE)
+saveRDS(m3, file="./data/hsa.12mirs.hg38.UTRcan.fullScan.GR.rds")
+```
+
+
+#only canonical
+```{r}
+m4 <- findSeedMatches(seqs, mods2, maxLogKd=NULL, BP = MulticoreParam(12, progressbar=TRUE), p3.extra =TRUE, ret="GRanges", onlyCanonical = TRUE)
+saveRDS(m4, file="./data/hsa.12mirs.hg38.can.fullScan.GR.rds")
+```

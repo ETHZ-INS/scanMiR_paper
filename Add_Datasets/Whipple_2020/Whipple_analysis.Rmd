@@ -1,0 +1,118 @@
+---
+title: "Predicted miRNA repression in real dataset"
+author: "Fridolin Gross"
+date: "`r Sys.Date()`"
+output:
+  rmdformats::readthedown:
+    highlight: tango
+    self_contained: true
+    thumbnails: true
+    lightbox: true
+    gallery: false
+    keep_md: no
+    number_sections: yes
+    fig_width: 8
+    fig_height: 8
+    fig_caption: true
+    df_print: paged
+    code_folding:	hide
+---
+
+# Required packages:
+```{r}
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(SummarizedExperiment)
+  library(GenomicRanges)
+  library(edgeR)
+  library(ggsci)
+  })
+
+```
+
+
+
+```{r}
+get_r2 <- function(log_ag, m, dea, column, p3=0){
+  m_agg <- scanMiR:::.aggregate_miRNA(m,a = log_ag,p3 = p3,coef_orf = 0,coef_utr = 0)
+  dea <- dea[c("Transcript.ID", column)]
+  colnames(dea) <- c("transcript","logFC")
+  m_merged <- merge(m_agg, dea, by = "transcript", all.y=TRUE)
+  m_merged$repression[is.na(m_merged$repression)] <- 0
+  return(cor(m_merged$repression, m_merged[["logFC"]]))
+}
+
+get_r2_vec <- function(m, log_ag_vec, dea, column, p3=0){
+  r2 <- map_dbl(log_ag_vec, get_r2, m, dea, column, p3=p3)
+  return(data.frame(log_ag = log_ag_vec, r2=r2))
+}
+
+get_r2_df <- function(m, dea,mir, tool,type="all", p3=0, level="gene") {
+  r2 <- get_r2_vec(m, log_ag_vec, dea, column = "logFC", p3=p3)
+  r2 <- cbind(r2, type = type,mir = mir,tool = tool, level=level, p3=p3)
+  return(r2)
+}
+
+log_ag_vec <- seq(-12.5, 2, 0.5)
+log_ag_vec <- sapply(log_ag_vec,function(x) exp(x))
+```
+
+
+# Load Data and generate SE
+```{r}
+if(file.exists("se_whipple.rds")){
+  se_whipple <- readRDS("se_whipple.rds")
+} else {
+  dirs <- dir("./salmon", full.names = FALSE)
+  quant_files <- paste("./salmon", dirs, "quant.sf", sep="/")
+  names(quant_files) <- dirs
+  quant_data <- lapply(quant_files, read.table, sep="\t", header = TRUE)
+  counts_list <- lapply(quant_data, `[`, "NumReads")
+  counts <- as.matrix(do.call(cbind, counts_list))
+  TPM_list <- lapply(quant_data, `[`, "TPM")
+  TPM <- as.matrix(do.call(cbind, TPM_list))
+  SRA_Table <- read.table("./SraRunTable.txt", sep=",", header=TRUE)
+  cd <- data.frame(condition = rep(c("WT", "clustKO"), each=3), row.names = dirs)
+  cd$condition <- factor(cd$condition, levels = c("WT", "clustKO"))
+  rd <- quant_data[[1]][c("Length", "EffectiveLength")]
+  row.names(rd) <- quant_data[[1]][["Name"]]
+  se_whipple <- SummarizedExperiment(list(counts = counts, TPM = TPM), colData=cd, rowData = rd)
+  saveRDS(se_whipple, file='se_whipple.rds')
+}
+```
+
+# DEA
+```{r}
+if(file.exists("se_whipple_DEA.rds")){
+  se_whipple_DEA <- readRDS("se_whipple_DEA.rds")
+} else {
+  mm <- model.matrix(~condition, data=cd)
+  se_whipple_DEA <- se_whipple[filterByExpr(assay(se_whipple), mm),]
+  
+  dds <- DGEList(assays(se_whipple_DEA)$counts, group=cd$condition)
+  dds <- calcNormFactors(dds)
+  dds <- estimateDisp(dds, mm)
+  fit <- glmFit(dds, mm)
+  res <- as.data.frame(topTags(glmLRT(fit, 'conditionclustKO'), Inf))
+  
+  rowData(se_whipple_DEA)$logFC <- res[rownames(se_whipple_DEA),]$logFC
+  rowData(se_whipple_DEA)$logCPM <- res[rownames(se_whipple_DEA),]$logCPM
+  rowData(se_whipple_DEA)$FDR <- res[rownames(se_whipple_DEA),]$FDR
+  rowData(se_whipple_DEA)$logFC <- res[rownames(se_whipple_DEA),]$logFC
+  
+  colData(se_whipple_DEA)$lib_size <- assay(se_whipple_DEA) %>% colSums()
+  assays(se_whipple_DEA)$logCPM <- log1p(cpm(dds, normalized.lib.sizes = T))
+  
+  saveRDS(se_whipple_DEA, file='se_whipple_DEA.rds')
+}
+```
+
+
+
+
+
+
+
+
+
+

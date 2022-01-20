@@ -1,0 +1,149 @@
+---
+title: "Targetscan_Corr_HEK"
+author: "Michael Soutschek"
+date: "24 2 2021"
+output: html_document
+---
+
+
+
+```{r}
+library(tidyverse)
+library(data.table)
+```
+
+
+# Helper Functions
+```{r}
+domnorm <- function(x, useMedian=TRUE){
+  y <- setNames(seq_len(ncol(x)), colnames(x))
+  if(useMedian){
+    x <- as.data.frame(lapply(y, FUN=function(i){
+      x[,i]-matrixStats::rowMedians(as.matrix(x[,-i]))
+    }), row.names=row.names(x))
+  }else{
+    x <- as.data.frame(lapply(y, FUN=function(i) x[,i]-rowMeans(x[,-i])), row.names=row.names(x), check.names = FALSE)
+  }  
+  x
+}
+
+get_cor_targetscan <- function(mir_names,mir, ob, tar, type = c("Predicted occupancy - low miRNA","Predicted occupancy - high miRNA","Predicted occupancy - transfected miRNA"), return.raw = FALSE){
+    type <- match.arg(type)
+    tar_wide <- pivot_wider(tar,id_cols = "Transcript ID", names_from = "MiRBase ID" , values_from = type, values_fill = 0)
+    tar_wide <- column_to_rownames(tar_wide, var = "Transcript ID")
+    subs_mir <- mir_names[mir_names!=mir]
+    tar_mir <- tar_wide[mir] - rowMeans(tar_wide[subs_mir], na.rm = TRUE)
+    ob_mir <- ob[mir]
+    colnames(ob_mir) <- "logTPM"
+    tar_mir <- merge(ob_mir,tar_mir,by = 0, all.x = TRUE)
+    tar_mir[[mir]][is.na(tar_mir[[mir]])] <- 0
+    if(return.raw){
+      return(tar_mir)
+    }else{
+    cor = cor.test(tar_mir[[mir]], tar_mir$logTPM, method="pearson")
+    return(cor$estimate^2)
+    }
+  }
+```
+
+
+
+
+# Load Data
+```{r}
+hek_mirs <- c("hsa-miR-122-5p", "hsa-miR-133a-3p.1", 
+"hsa-miR-138-5p", "hsa-miR-145-5p", "hsa-miR-184", "hsa-miR-190a-5p", 
+"hsa-miR-200b-3p", "hsa-miR-216a-5p", "hsa-miR-217", "hsa-miR-219a-5p", 
+"hsa-miR-375", "hsa-miR-451a")
+
+
+tar <- readRDS("Targetscan8_human_all.rds")
+hMiR <- fread("/mnt/schratt/scanMiR_paper_scripts_old/Targetscan_Corr/Run_Targetscan/Targetscan/Raw_Files/miR_Family_Info.txt")
+
+
+ob <- read.delim("../../Parameter_Optimization/data/McGeary_2019_raw/GSE140218_HEK293FT_transfection_logtpm_batchnormalized.txt", row.names=1)
+row.names(ob) <- gsub("\\..*","",row.names(ob))
+```
+
+
+# Filter Data
+
+```{r}
+hMiR_hek <- hMiR[hMiR$`MiRBase ID` %in% hek_mirs,]
+
+tar_hek <- tar[tar$`miRNA family` %in% hMiR_hek$`Seed+m8`,]
+tar_hek <- tar_hek[tar_hek$`Transcript ID` %in% row.names(ob),]
+tar_hek <- merge(tar_hek,hMiR_hek[,c("Seed+m8","MiRBase ID")], by.x = "miRNA family", by.y = "Seed+m8",all.x = TRUE)
+tar_hek$`Predicted occupancy - low miRNA` <- as.numeric(tar_hek$`Predicted occupancy - low miRNA`)
+tar_hek$`Predicted occupancy - high miRNA` <- as.numeric(tar_hek$`Predicted occupancy - high miRNA`)
+tar_hek$`Predicted occupancy - transfected miRNA` <- as.numeric(tar_hek$`Predicted occupancy - transfected miRNA`)
+
+hek_fams <- as.character(levels(as.factor(tar_hek$`MiRBase ID`)))
+```
+
+
+
+
+# Prepare Data
+```{r}
+ob <- domnorm(ob)
+colnames(ob) <- hek_fams # unsafe 
+```
+
+
+
+# Correlate
+```{r}
+#low
+tar_cor_low <- list()
+for(mir in hek_fams){
+  cor <- get_cor_targetscan(mir_names = hek_fams, mir = mir,ob = ob, tar = tar_hek, type = "Predicted occupancy - low miRNA")
+  tar_cor_low[[mir]]["r2"] <- cor
+}
+
+tar_df_low <- as.data.frame(t(as.data.frame(tar_cor_low)))
+tar_df_low$condition <- "TS8 low ab. miR Occ."
+tar_df_low$mir <- row.names(tar_df_low)
+
+#high
+tar_cor_high <- list()
+for(mir in hek_fams){
+  cor <- get_cor_targetscan(mir_names = hek_fams, mir = mir,ob = ob, tar = tar_hek, type = "Predicted occupancy - high miRNA")
+  tar_cor_high[[mir]]["r2"] <- cor
+}
+
+tar_df_high <- as.data.frame(t(as.data.frame(tar_cor_high)))
+tar_df_high$condition <- "TS8 high ab. miR Occ."
+tar_df_high$mir <- row.names(tar_df_high)
+
+#transfected
+tar_cor_trans <- list()
+for(mir in hek_fams){
+  cor <- get_cor_targetscan(mir_names = hek_fams, mir = mir,ob = ob, tar = tar_hek, type = "Predicted occupancy - transfected miRNA")
+  tar_cor_trans[[mir]]["r2"] <- cor
+}
+
+tar_df_trans <- as.data.frame(t(as.data.frame(tar_cor_trans)))
+tar_df_trans$condition <- "TS8 transfected miR Occ."
+tar_df_trans$mir <- row.names(tar_df_trans)
+
+#combine
+tar_df <- rbind(tar_df_low,tar_df_high,tar_df_trans)
+
+saveRDS(tar_df,"Targetscan8_corr_hek.rds")
+
+# tar_dt <- data.table()
+# for(mir in hek_fams){
+#   dt <- get_cor_targetscan(mir_names = hek_fams, mir = mir,ob = ob, tar = tar_hek,return.raw = TRUE,type = "Predicted occupancy - transfected miRNA")
+#   colnames(dt) <- c("transcript","observed","predicted")
+#   tar_dt <- rbind(tar_dt,dt)
+# }
+# 
+# saveRDS(tar_dt,"Targetscan_corr_raw_hek.rds")
+```
+
+
+
+
+
+

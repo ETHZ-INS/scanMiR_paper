@@ -1,0 +1,95 @@
+---
+title: "Download_Targetscan8"
+author: "Michael Soutschek"
+date: "3 1 2022"
+output: html_document
+---
+
+```{r}
+library(data.table)
+```
+
+
+#Adapt the enrichMiR Download function
+```{r}
+getTargetScanPred <- function(species = c("human","mouse","rat"), type=c("conserved","all"), keepMers=FALSE){
+  type <- match.arg(type)
+  species <- match.arg(species)
+  # assign species ID
+  spec <- switch( species,
+                  human = 9606,
+                  mouse = 10090,
+                  rat = 10116, 
+                  stop("No matched species"))
+  
+  tmp <- tempfile()
+  if(type=="conserved"){
+    # download TargetScan conserved miRNA sites
+    if (species == "human"){
+      #Downlaod Targetscan Species specific site file
+      download.file(
+        "http://www.targetscan.org/vert_80/vert_80_data_download/Summary_Counts.default_predictions.txt.zip", tmp)
+      a <- fread(unzip(file.path(tmp)),drop = c("Aggregate PCT"))
+    }else if(any(species %in% c("mouse","rat"))){
+      #Downlaod Targetscan Species specific site file
+      download.file(
+        "http://www.targetscan.org/mmu_80/mmu_80_data_download/Summary_Counts.default_predictions.txt.zip", tmp)
+      a <- fread(unzip(file.path(tmp)),drop = c("Aggregate PCT"))
+    }
+    a$sites <- a[["Total num conserved sites"]]
+  }else{
+    #Downlaod Targetscan Species specific site file (All Sites)
+    if (species == "human"){
+      download.file(
+        "http://www.targetscan.org/vert_80/vert_80_data_download/Summary_Counts.all_predictions.txt.zip", tmp)
+      a <- fread(unzip(file.path(tmp)),drop = c("Aggregate PCT"))
+    }else if(any(species %in% c("mouse","rat"))){
+      download.file(
+        "http://www.targetscan.org/mmu_80/mmu_80_data_download/Summary_Counts.all_predictions.txt.zip", tmp)
+      a <- fread(unzip(file.path(tmp)),drop = c("Aggregate PCT"))
+    }
+    a$sites <- a[["Total num conserved sites"]]+a[["Total num nonconserved sites"]]
+  }
+  unlink(tmp)
+  a <- as.data.frame(a[a$`Species ID` == spec,])
+  a$`Transcript ID` <- gsub("\\..*","",a$`Transcript ID`)
+  keep <- c("Transcript ID","miRNA family", "sites", "Predicted occupancy - low miRNA","Predicted occupancy - high miRNA", "Predicted occupancy - transfected miRNA")
+  if(keepMers){
+    keep <- c(keep, grep("^Number of", colnames(a), value=TRUE))
+    if(type=="conserved") keep <- keep[-grep("nonconserved",keep)]
+    keep <- keep[-grep("6mer",keep)]}
+  a <- a[,keep]
+  a[,1] <- as.factor(a[,1])
+  a[,2] <- as.factor(a[,2])
+  a[[4]][a[[4]] == "NULL"] <- 0
+  a[[5]][a[[5]] == "NULL"] <- 0
+  a[[6]][a[[6]] == "NULL"] <- 0
+  if(keepMers){
+    if(type=="conserved"){
+      colnames(a)[grep("8mer",colnames(a))] <- "Sites_8mer"
+      colnames(a)[grep("7mer-m8",colnames(a))] <- "Sites_7mer_m8"
+      colnames(a)[grep("7mer-1a",colnames(a))] <- "Sites_7mer_1a"
+    }else{
+      a$`Sites_8mer` <- rowSums(a[,grep("8mer",colnames(a))],na.rm = FALSE)
+      a$`Sites_7mer_m8` <- rowSums(a[,grep("7mer-m8",colnames(a))],na.rm = FALSE)
+      a$`Sites_7mer_1a` <- rowSums(a[,grep("7mer-1a",colnames(a))],na.rm = FALSE)
+      a <- a[,-grep("Number",colnames(a))]
+    }
+  }
+  a
+}
+
+```
+
+
+#Download Human
+```{r}
+Hum <- getTargetScanPred(species = "human", type = "all")
+saveRDS(Hum,"Targetscan8_human_all.rds")
+```
+
+
+
+
+
+

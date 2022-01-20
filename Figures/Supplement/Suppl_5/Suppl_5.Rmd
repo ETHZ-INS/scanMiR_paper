@@ -1,18 +1,19 @@
 ---
-title: "Suppl_4"
+title: "Suppl. 2"
 author: "Michael Soutschek"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
-
 
 
 ```{r, include=FALSE}
 if(!exists('FIG_NB')){
-  FIG_NB <- 0; FIG_STRING <- "Supplementary Figure S"
+  FIG_NB <- 0
   getFigNb <- function(increment=FALSE){
     if(increment) FIG_NB <<- FIG_NB + 1
-    paste0(FIG_STRING,FIG_NB)
+    FIG_NB
   }
 }
 knitr::opts_chunk$set(fig.width=8)
@@ -21,41 +22,158 @@ knitr::opts_chunk$set(fig.width=8)
 # `r getFigNb(TRUE)`
 
 
+
 ```{r, include=FALSE}
 suppressPackageStartupMessages({
   library(ggplot2)
   library(cowplot)
+  library(gridExtra)
+  library(scales)
+  library(GenomicRanges)
+  library(S4Vectors)
+  library(patchwork)
 })
 source("../../misc.R")
 ```
 
+
+```{r, warning=FALSE}
+df <- rbind(
+  readRDS("cut_off_corr/allCors.HEK.new.rds"),
+  readRDS("cut_off_corr/allCors.HeLa.new.rds") )
+df0 <- df[df$cut_off==0,]
+r20 <- setNames(df0$r2,df0$miRNA)
+r20 <- r20[r20>0.1]
+df <- df[df$miRNA %in% names(r20),]
+df$prop.r <- sqrt(df$r2)/sqrt(r20)[df$miRNA]
+df$prop.r2 <- df$r2/r20[df$miRNA]
+
+m1 <- readRDS(file = "../../../Parameter_Optimization/data/hsa.12mirs.HEK.fullScan.GR.rds")
+m2 <- readRDS(file = "../../../Parameter_Optimization/data/hsa.12mirs.HELA.fullScan.GR.rds")
+m <- c(m1,m2)
+names(cutoffs) <- cutoffs <- unique(df$cut_off)
+propAbove <- sapply(cutoffs, FUN=function(x) sum(m$log_kd> (1000*x)))/length(m)
+
+p1 <- ggplot(df, aes(cut_off, prop.r2)) + geom_line(aes(colour=miRNA)) + 
+  geom_smooth(colour="black") + geom_vline(xintercept=-0.3, linetype="dashed") +
+  labs(x=bquote(~log(K[D])~"cut-off"), y=bquote("Proportion of full"~r^2)) + theme_minimal()
+p2 <- ggplot(data.frame(logkd=cutoffs, propAbove=propAbove), aes(logkd, propAbove)) + 
+  geom_line() + ylab(bquote("Proportion of sites\nabove threshold")) + ylim(0,1) +
+  xlab(bquote(~log(K[D])~"cut-off")) +
+  annotate("point", x=-0.3, y=propAbove["-0.3"]) + 
+  annotate("text", x=-0.35, y=propAbove["-0.3"]+0.15, label=paste0(round(100*propAbove["-0.3"]),"% reduction"), hjust=0) +
+  theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank()) + theme_minimal()
+pp1 <- p2/p1 + plot_layout(heights=c(1,2))
+```
+
 ```{r, include=FALSE}
-Rims3 <- readRDS("Rims3_dist.rds")
-Rims3$logKd <- Rims3$log_kd / 1000
-Rims3$type <- ifelse(Rims3$type == "non-canonical","",as.character(Rims3$type))
-Rims3$type <- ifelse(grepl("6mer",Rims3$type),"",as.character(Rims3$type))
-Rims3 <- Rims3[Rims3$logKd < -1,]
-
-p1 <- ggplot(Rims3, aes(x = start, y = -`logKd`)) + 
-        geom_hline(yintercept=1, linetype="dashed", color = "red", size=1) + 
-        geom_point(size=2) + geom_text(label = Rims3$type,nudge_y = 0.1) + 
-        geom_point(data = Rims3[Rims3$start == 1061,],size = 4, shape = 1) +
-        facet_wrap("dist",nrow = 2) + ylab(bquote("-"*logK[D]~"(>1)")) +
-        xlab("UTR length") + theme_light() + theme(
-          strip.text.x = element_text(size = 12,color = "black"),
-          plot.margin = unit(c(2,2,2,2), "lines")
-        ) + ggtitle("Rat NM_022931 - miR-138-5p")
-
+# mods <- scanMiRData::getKdModels()
+# topkd <- sapply(mods[names(r20)], FUN=function(x) mean(head(sort(x$mer8),20)/1000))
+# df15 <- df[df$cut_off== -1.5,]
+# df15$topKd <- topkd[as.character(df15$miRNA)]
+# with(df15, cor.test(topKd, prop.r2))
 ```
 
-```{r, fig.width=8, fig.height=6}
-p1
-#ggsave("Suppl_5.png")
+
+
+
+
+
+
+
+
+
+
+
+
+```{r, include=FALSE}
+# Cut off Corr
+
+df1 <- readRDS("./cut_off_corr/PlotDF.rds")
+
+p1 <- ggplot(df1, aes(x = cut_off, y = r2)) + 
+  geom_line(size = 1) +
+  theme_minimal() +
+  ylab(expression(~r^2)) +
+  xlab(bquote(~log(K[D])~"cut-off")) +
+  facet_grid(~mir) +
+  theme(
+                panel.border =element_rect(color="black", fill=NA),
+                text = element_text(size=12),
+                legend.title = element_text(size = rel(0.9)),
+                legend.text = element_text(size = rel(0.8))
+  )
+
+
+# Pie Chart
+
+e <- as.data.frame(mcols(m))
+e$transcript <- as.factor(seqnames(m))
+
+cut_off <- nrow(e[e$log_kd > -300,])/nrow(e)
+rest <- 1 - nrow(e[e$log_kd > -300,])/nrow(e)
+
+df <- data.frame("cut" = cut_off , "rest" = rest)
+df <- data.frame(t(df))
+df$group <- c("Cut-off at -0.3","All other sites")
+
+
+blank_theme <- theme_minimal()+
+  theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  panel.border = element_blank(),
+  panel.grid=element_blank(),
+  axis.ticks = element_blank(),
+  plot.title=element_text(size=14, face="bold"),
+  legend.title = element_blank(),
+  plot.margin = unit(c(0,2,0,1), "lines")
+  )
+
+pie <- ggplot(df, aes(x="", y=t.df., fill=group))+
+  geom_bar(width = 1, stat = "identity") + 
+  coord_polar("y", start=0) + 
+  scale_fill_manual(values = c("#4477AA","#CC6677")) +
+  blank_theme 
+
+pie <- pie + theme(axis.text.x=element_blank(), legend.position = "bottom") + 
+  geom_text(aes(y = t.df./2 + c(0, cumsum(t.df.)[-length(t.df.)]), 
+                label = percent(t.df./100)), size=5)
 ```
 
+
+```{r}
+# Table
+
+df2 <- readRDS("./cut_off_corr/Plot_Table_cut_df.rds")
+p2 <- tableGrob(df2, rows = NULL, theme=ttheme_default(base_size=10))
+```
+
+
+
+```{r}
+#Speed Figure
+
+df4 <- readRDS("../../../Speed_Comparison/Speed_DF2.rds")
+
+p4 <- ggplot(df4,aes(x = Sequences, y = time, color = Algorithm)) + 
+  geom_line(aes(linetype = Condition)) + scale_x_log10() + 
+  ylab("Time (s)") + theme_classic() + scale_color_manual(values = meth_cols2, guide="none") + 
+  theme(plot.margin = unit(c(2,0.5,0,0), "lines"), legend.position = "bottom", legend.direction = "vertical")
+```
+
+
+
+
+```{r, fig.width=10, fig.height=8, message=FALSE}
+
+pp2 <- plot_grid(p2,p4,ncol = 2, labels = c("B","C"))
+plot_grid(pp1,pp2,labels = c("A",""), ncol = 1, rel_heights = c(1,0.85), scale = 0.95)
+ggsave("Suppl_5.png",bg = "white",width = 10, height = 8)
+```
 
 
 
 ### `r getFigNb()`
 
-**Removal of overlapping sites in scanMiR.** Users can specify a minimum allowed distance between binding sites of the same miRNA. Within that distance, scanMiR automatically keeps only the site with the highest affinity, as shown here for miR-138-5p binding sites on a rat Rims3 transcript. An example site removed due to a nearby higher-affinity site is highlighted.
+**Computational optimizations in scanMiR - Preliminary. A:** Proportion of maximal Pearson correlation values of predicted and measured miRNA repression depending on different maximal $K_D$-values (“cutoff”) for all miRNAs transfected in HEK & HeLa with an $r^2$-value of at least 10% from the study of McGeary and colleagues (2019). MiR-216b-5p is the only miRNA displayed with a reduction of more than 2.5% of its maximal $r^2$-value with a cutoff of -0.3. The black line indicates the smoothed mean. Potential reductions in site numbers across the spectrum of indicated cutoffs are shown in the upper panel. **B:** The maximum $log(K_D)$ cutoff-values for the 12 miRNAs used in HEK-transfection experiments (McGeary et al., 2019) which cause a diminution of the correlation by only 2.5% (= Cut-off 97.5%) or 1% (= Cut-off 99%), respectively. For individual miRNAs, there were pronounced variations in the cutoff beyond which the addition of binding sites with a lower affinity did not substantially improve the correlation between predicted and observed repression. **C:** Run times of the scanning algorithm of McGeary et al. (2019) with and without folding of the transcripts.

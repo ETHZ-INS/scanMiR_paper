@@ -27,17 +27,17 @@ getFigNb <- function(increment=FALSE){
 
 \newpage
 
-```{r child='Suppl_1/Suppl_1.rmd', cache=TRUE}
+```{r child='Suppl_1/Suppl_1.rmd', cache=FALSE}
 ```
 
 \newpage
 
-```{r child='Suppl_2/Suppl_2.Rmd', cache=TRUE}
+```{r child='Suppl_2/Suppl_2.Rmd', cache=FALSE}
 ```
 
 \newpage
 
-```{r child='Suppl_3/Suppl_3.Rmd', cache=TRUE}
+```{r child='Suppl_3/Suppl_3.Rmd', cache=FALSE}
 ```
 
 \newpage
@@ -47,12 +47,17 @@ getFigNb <- function(increment=FALSE){
 
 \newpage
 
-```{r child='Suppl_5/Suppl_5.Rmd', cache=TRUE}
+```{r child='Suppl_5/Suppl_5.Rmd', cache=FALSE}
 ```
 
 \newpage
 
 ```{r child='Suppl_6/Suppl_6.Rmd', cache=FALSE}
+```
+
+\newpage
+
+```{r child='Suppl_7/Suppl_7.Rmd', cache=FALSE}
 ```
 
 \newpage
@@ -71,5 +76,5 @@ The live app can be visited at https://ethz-ins.org/scanMiR/
 
 \newpage
 
-```{r child='Suppl_8/Suppl_8.Rmd'}
+```{r child='Suppl_9/Suppl_9.Rmd', cache=TRUE}
 ```

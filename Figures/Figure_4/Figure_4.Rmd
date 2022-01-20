@@ -50,7 +50,7 @@ p3 <- ggplot(Hoxb8_df, aes(x = start, y = -`logKd`)) +
         geom_point(data=Hoxb8_df[Hoxb8_df$info!="",], shape=1, size=5) +
         scale_color_manual(values = type_cols1, drop=FALSE) + 
         geom_text_repel(label = Hoxb8_df$info, nudge_y = 0.5, nudge_x=0, min.segment.length = 0) +
-        ggtitle("Hoxb8 - miR-196a-5p") + xlab("3'UTR Sequence") + ylab(bquote("-"*logK[D])) + 
+        ggtitle("Hoxb8 - miR-196a-5p") + xlab("3'UTR Sequence") + ylab(bquote("-"*log(K[D]))) + 
         theme_light() +
         xlim(1,856) + ylim(1,6.5) +
         theme(
@@ -102,7 +102,7 @@ p5 <- ggplot(CDR1_df, aes(x = start, y = -`logKd`)) +
         geom_point(data=CDR1_df[CDR1_df$info!="",], shape=1, size=5) +
         scale_color_manual(values = type_cols1, drop=FALSE) + 
         geom_text_repel(label = CDR1_df$info, nudge_y = -0.35, nudge_x=0, min.segment.length = 0) +
-        ggtitle("circular CDR1as") + xlab("Sequence") + ylab(bquote("-"*logK[D])) + 
+        ggtitle("circular CDR1as") + xlab("Sequence") + ylab(bquote("-"*log(K[D]))) + 
         theme_light() + ylim(1,6.5) +
         theme(
           panel.border =element_rect(color="black", fill=NA),
@@ -142,7 +142,7 @@ p7 <- ggplot(Cyr_df, aes(x = start, y = -`logKd`)) +
         geom_text_repel(label = Cyr_df$TDMD2, nudge_y = -0.5, min.segment.length = 0) +
         scale_color_manual(values = type_cols1) + 
         #geom_text(label = Cyr_df$type,nudge_y = -0.4) +
-        ggtitle("Cyrano - miR-7-5p") + xlab("Sequence") + ylab(bquote("-"*logK[D]~"(>1)")) +
+        ggtitle("Cyrano - miR-7-5p") + xlab("Sequence") + ylab(bquote("-"*log(K[D])~"(>1)")) +
         theme_light() + ylim(1,6.5) +
         theme(
                 panel.border =element_rect(color="black", fill=NA),
@@ -179,7 +179,7 @@ p9 <- ggplot(Nrep_df, aes(x = start, y = -`logKd`)) +
         geom_text_repel(label = Nrep_df$TDMD2, nudge_y = -0.5, min.segment.length = 0) +
         scale_color_manual(values = type_cols1) + 
         #geom_text(label = Cyr_df$type,nudge_y = -0.4) +
-        ggtitle("Nrep - miR-29b-3p") + xlab("Sequence") + ylab(bquote("-"*logK[D])) + 
+        ggtitle("Nrep - miR-29b-3p") + xlab("Sequence") + ylab(bquote("-"*log(K[D]))) + 
         theme_light() + ylim(1,6.5) +
         theme(
                 panel.border =element_rect(color="black", fill=NA),
