@@ -1,24 +1,37 @@
 ---
-title: "Figure 6 - Enriched miRNA-circRNA pairs"
+title: "Supplementary Figure - Enriched miRNA-circRNA pairs"
 author: "Pierre-Luc Germain"
 date: "4/7/2021"
 output: html_document
 ---
 
-```{r}
+
+```{r, include=FALSE}
+if(!exists('FIG_NB')){
+  FIG_NB <- 0; FIG_STRING <- "Supplementary Figure S"
+  getFigNb <- function(increment=FALSE){
+    if(increment) FIG_NB <<- FIG_NB + 1
+    paste0(FIG_STRING,FIG_NB)
+  }
+}
+knitr::opts_chunk$set(fig.width=8)
+```
+
+# `r getFigNb(TRUE)`
+
+```{r, include=FALSE}
 suppressPackageStartupMessages({
   library(ggplot2)
   library(ggrepel)
   library(cowplot)
 })
 theme_set(theme_cowplot(font_size = 12))
-```
 
 # Circ Enrichment 
-```{r}
-e <- readRDS("../../circRNAs/Mouse/enrichment.scores.7and8mers.rds")
 
-mirexp <- read.delim("../../Add_Datasets/Chiang/Normalized miRNA Brain expression from Chiang et al. 2010_.csv", sep=",")
+e <- readRDS("../../../circRNAs/Mouse/enrichment.scores.7and8mers.rds")
+
+mirexp <- read.delim("../../../Add_Datasets/Chiang/Normalized miRNA Brain expression from Chiang et al. 2010_.csv", sep=",")
 mirexp <- sapply(split(mirexp[,2], mirexp[,1]), na.rm=TRUE, FUN=max)
 e$mirexp <- mirexp[as.character(e$set)]
 e <- e[e$sites>5,]
@@ -48,14 +61,14 @@ p1 <- ggplot(e, aes(expression, -logp.binom+1)) +
   labs(x="circRNA expression in the brain (BSJ counts)", 
        y="-log(binomial p.value)", colour="Host gene") +
   geom_point(data=etop, aes(colour=gene, size=sites)) + 
-  geom_text_repel(data=etop, aes(label=lab), min.segment.length = 0) 
+  geom_text_repel(data=etop, aes(label=lab), min.segment.length = 0)
 ```
 
 
+```{r, include=FALSE}
 # circRNA Slicing sites
 
-```{r, fig.width=9, fig.height=4}
-sl <- readRDS("../../circRNAs/Mouse/slicing.rds")
+sl <- readRDS("../../../circRNAs/Mouse/slicing.rds")
 saveRDS(sl, "suppTable_circSlicing.rds")
 sl$gene[sl$gene=="C230004F18Rik"] <- "Cdr1as"
 sl$lab <- paste(gsub("mmu-","",sl$miRNA),sl$gene,sep="\n")
@@ -66,26 +79,17 @@ p2 <- ggplot(sl, aes(txexp,mirexp)) + geom_point() +
   geom_text_repel(data=sl[(sl$mirexp>15 & sl$txexp>10) | sl$txexp>10,], aes(label=lab),
                    fill = NA, max.overlaps = 30, min.segment.length = 0, nudge_x = 0.3, nudge_y=c(-0.25,0.25)) + 
   scale_x_log10() + scale_y_log10() + labs(x="circRNA expression in the brain (BSJ counts)", y="miRNA expression (logCPMs)") 
-p2
 ```
 
-```{r, fig.width=8, fig.height=4}
+```{r, fig.width=8, fig.height=7, echo=FALSE, warning=FALSE}
 pp <- plot_grid( 
   p1 + ggtitle("circRNA-miRNA enrichment"),
   p2 + ggtitle("circRNA slicing sites") + ylab("miRNA expression\n(logCPMs)"),
   nrow=2, rel_heights =c(5,2.75), labels="AUTO", scale=0.95
 )
-
-
-ggsave("Figure_6.png",pp,width=8, height = 7, bg = "white")
-ggsave("Figure_6.pdf",pp,width=8, height = 7, bg = "white")
+pp
 ```
 
+### `r getFigNb()`
 
-
-
-
-
-
-
-
+**Prediction of key miRNA binding sites on circRNAs. A:** Abundant circRNAs with enrichment for specific miRNA binding sites. Each dot represents a miRNA and circular RNA isoform pair, with only the most significant pair for interesting candidate genes being labeled. The y-axis indicates the significance of the circRNA-miRNA enrichment. Only miRNAs with at least 100 reads and circRNAs overlapping genes were considered. **B:** Prediction of circRNA slicing sites. The by far strongest signal comes from the Cdr1as circRNA.

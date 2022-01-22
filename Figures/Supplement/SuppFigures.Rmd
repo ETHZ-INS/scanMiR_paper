@@ -62,6 +62,11 @@ getFigNb <- function(increment=FALSE){
 
 \newpage
 
+```{r child='Suppl_8/SuppCircs.Rmd', cache=FALSE}
+```
+
+\newpage
+
 # `r getFigNb(TRUE)`
 
 ```{r app, out.width="82%", fig.align="center"}

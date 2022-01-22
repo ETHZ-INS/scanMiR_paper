@@ -13,8 +13,8 @@ library(openxlsx)
 tabs <- list(
   "STable1_linearTDMD"=readRDS("../Figures/Figure_5/tdmd.rds"),
   "STable2_circTDMD"=readRDS("../Figures/Figure_5/suppTable_circTDMD.rds"),
-  "STable3_circSponges"=readRDS("../Figures/Figure_6/supp_table_sponges.rds"),
-  "STable4_circSlicing"=readRDS("../Figures/Figure_6/suppTable_circSlicing.rds")
+  "STable3_circSponges"=readRDS("../Figures/Supplement/Suppl_9/supp_table_sponges.rds"),
+  "STable4_circSlicing"=readRDS("../Figures/Supplement/Suppl_9/suppTable_circSlicing.rds")
 )
 ```
 

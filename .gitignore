@@ -1,6 +1,8 @@
 *.html
 *.png
 *.pdf
+*.log
+*.tex
 *_cache/
 *_files/
 miRNA_models-master/
