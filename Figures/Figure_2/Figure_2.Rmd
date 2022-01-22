@@ -59,7 +59,7 @@ p1a <- ggplot(kd, aes(x=log_kd, y=compressed) ) +
   geom_text(data=data.frame(x=-4.8,y=2,mir=unique(kd$mir),label=paste0("r=",round(c(cor(kd1$log_kd,kd1$compressed),cor(kd2$log_kd,kd2$compressed)),3))), aes(x=x,y=y,label=label)) +
   facet_wrap(~mir, nrow=1)
 
-p1aj <- ggplot(kd, aes(x=log_kd, y=residual) ) + 
+p1aj <- ggplot(kd, aes(x=log_kd, y=residual) ) +
     ggrastr::rasterize(geom_pointdensity(size=0.8, show.legend=FALSE), dpi=150) +
     labs(x=bquote("Original"~log(K[D])), y="Residuals") +
     scale_colour_viridis() + facet_wrap(~mir, nrow=1) +
@@ -105,12 +105,24 @@ ms$diffNC <- ms$topNC-ms$median10NCs
 mod <- loess(ms$topNC~ms$m7)
 ms$topNC.dev <- ms$topNC - mod$fitted
 ms$miRNA <- row.names(ms)
-
-ggplot(ms, aes(m7, topNC)) + geom_abline(slope=1, colour="grey") + 
-  geom_point(aes(colour=diffNC)) + 
-  geom_label_repel(data=ms[order(ms$topNC.dev,decreasing=TRUE)[1:10],], aes(label=miRNA), min.segment.length = 0) + 
-  labs(x="-logKD of 7mer", y="-logKD of top non-canonical", colour="Gini coefficient of the top 15 7mers") + theme(legend.position = "bottom")
 ```
+
+```{r, fig.width=9, fig.height=4}
+# check for relation of the correlation with seed complexity
+ms$mirseq <- sapply(mods, FUN=function(x) x$mirseq)[row.names(ms)]
+ms$mir.entropy <- acss::entropy(ms$mirseq)
+ms$seed7 <- sapply(mods, FUN=function(x) substr(x$canonical.seed,1,7))[row.names(ms)]
+ms$cor <- sapply(mods, FUN=function(x) x$cor)[row.names(ms)]
+ms$seed7.entropy <- acss::entropy(ms$seed7)
+ms$seed7.entropy2 <- as.factor(round(ms$seed7.entropy,2))
+ms$seed.GC <- nchar(gsub("A|T","",ms$seed7))/7
+p1 <- ggplot(ms, aes(seed7.entropy2, cor)) + geom_boxplot() +
+  labs(x="Seed entropy", y="Correlation")
+p2 <- ggplot(ms, aes(as.factor(round(seed.GC,2)), cor)) + geom_boxplot() + 
+  ylab("Correlation") + xlab("Proportion of G/C in seed")
+plot_grid(p1,p2)
+```
+
 
 
 ```{r, fig.width=10, fig.height=11}

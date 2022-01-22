@@ -81,7 +81,7 @@ p2 <- ggplot(df2, aes(miRNA, r2, fill = type)) +
   scale_fill_manual(values=meth_cols2[df2$type]) + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "top") +
   #ggtitle("Correlations of RBNS Mirs") + 
-  labs(x="", y=bquote("Correlation with observed repression"~(r^2)))
+  labs(x="", y="Correlation with observed\nrepression (r^2)")
 ```
 
 
@@ -96,7 +96,7 @@ p3 <- ggplot(df3, aes(miRNA, r2, fill = type)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1), 
         legend.position = "top", legend.title = element_blank()) +
   #ggtitle("Correlations of HEK-transfection datasets") + 
-  labs(x="", y=bquote("Correlation with observed repression"~(r^2)))
+  labs(x="", y="Correlation with observed\nrepression (r^2)")
 ```
 
 
