@@ -30,7 +30,7 @@ source("../misc.R")
 
 #Get miRNA expression and TDMD miRs from Shi et al
 ```{r}
-mirexp_df <- read.delim("../../Add_Datasets/Chiang/Mouse/Normalized miRNA Brain expression from Chiang et al. 2010_.csv", sep=",")
+mirexp_df <- read.delim("../../Add_Datasets/Chiang/Normalized miRNA Brain expression from Chiang et al. 2010_.csv", sep=",")
 colnames(mirexp_df) <- c("miRNA","cpm")
 mirexp <- sapply(split(mirexp_df[,2], mirexp_df[,1]), na.rm=TRUE, FUN=max)
 
@@ -45,7 +45,7 @@ mouse_mir_tdmd_sig <- paste0("mmu-",mir_tdmd_sig)
 
 #Get expressed transcripts from Whipple et al.
 ```{r}
-se <- readRDS("../../Add_Datasets/Whipple_2020/se_whipple_DEA.rds")
+se <- readRDS("../../Add_Datasets/Whipple_2020/se_whipple.rds")
 se_wt <- se[,se$condition == "WT"]
 se_wt <- se_wt[which(rowSums(assays(se_wt)$TPM >= 10) >= 2),]
 se_wt_transcripts <- gsub("\\..*","",row.names(se_wt))
@@ -58,27 +58,19 @@ se_wt_TPM$seqnames <- gsub("\\..*","",row.names(se_wt_TPM))
 
 
 #load mRNA scan and filter for TDMD and expressed transcripts
-```{r}
-m <- loadIndexedFst("/mnt/schratt/miRNA_KD/pl_test/new/mm10.matches.fst")
 
+```{r, eval=FALSE}
+m <- loadIndexedFst("/mnt/schratt/miRNA_KD/pl_test/new/mm10.matches.fst")
 # filter for TDMD
 tmp <-fst(m@fst.file)
 note <- tmp[,"note"]
 w <- grep("TDMD", note)
 tmp_tdmd <- tmp[w,]
-```
-
-
-#filter for transcripts
-```{r}
 # filter for transcripts
 transcripts <- tmp_tdmd[,"seqnames"]
 w2 <- transcripts %in% se_wt_transcripts
 tmp_tdmd_tr <- tmp_tdmd[w2,]
-```
-
-#filter for tdmd miRs
-```{r}
+# filter for tdmd miRs
 tmp_tdmd_tr$mir <- gsub("mmu-","",tmp_tdmd_tr$miRNA)
 tdmd <- tmp_tdmd_tr[tmp_tdmd_tr$mir %in% mir_tdmd_sig,]
 tdmd$biotype <- "mRNA"
@@ -87,7 +79,7 @@ saveRDS(tdmd,"mouse_tdmd_expr_transcripts_mirs.rds")
 ```
 
 
-```{r}
+```{r, include=FALSE}
 tdmd <- readRDS("mouse_tdmd_expr_transcripts_mirs.rds")
 ```
 
@@ -138,7 +130,7 @@ p1
 
 
 ```{r}
-g <- import("/mnt/schratt/scanMiR_paper_scripts/circRNAs/Mouse/mouse_brain_circRNAs.gtf")
+g <- import("../../circRNAs/Mouse/mouse_brain_circRNAs.gtf.gz")
 tmp <- strsplit(g$isoform,"|",fixed=TRUE)
 g <- g[rep(seq_along(g),lengths(tmp))]
 g$isoform <- unlist(tmp)
@@ -146,7 +138,7 @@ df <- data.frame(row.names=paste(g$circ_id, g$isoform), score=as.integer(g$score
                  gene=g$gene_name, strand=as.factor(strand(g)))
 df <- df[order(df$gene, -df$score),]
 
-circ <- readRDS("/mnt/schratt/scanMiR_paper_git/circRNAs/Mouse/canonical.GR.rds")
+circ <- readRDS("../../circRNAs/Mouse/canonical.GR.rds")
 circ <- circ[grep("TDMD",circ$note)]
 circ$tx.type <- "circRNA"
 circ$tx.exp <- df[as.character(seqnames(circ)),"score"]
@@ -187,9 +179,8 @@ pp <- plot_grid(
   p2 + ggtitle("Potential TDMD sites in circRNAs"), 
   nrow=2, labels="AUTO", scale=0.95
 )
-ggsave("Figure_5.pdf",plot = pp, width = 8, height = 8,bg = "white")
-ggsave("Figure_5.png",plot = pp, width = 8, height = 8,bg = "white")
-
+ggsave("Figure_5.pdf", plot = pp, width = 8, height = 8, bg="white")
+ggsave("Figure_5.png", plot = pp, width = 8, height = 8, bg="white")
 ```
 
 
