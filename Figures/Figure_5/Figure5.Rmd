@@ -129,7 +129,7 @@ p1
 
 
 
-```{r}
+```{r, eval=FALSE}
 g <- import("../../circRNAs/Mouse/mouse_brain_circRNAs.gtf.gz")
 tmp <- strsplit(g$isoform,"|",fixed=TRUE)
 g <- g[rep(seq_along(g),lengths(tmp))]
@@ -145,6 +145,15 @@ circ$tx.exp <- df[as.character(seqnames(circ)),"score"]
 circ$gene <- df[as.character(seqnames(circ)),"gene"]
 circ$mir.exp <- log10(1+mirexp[as.character(circ$miRNA)])
 circ <- circ[circ$miRNA %in% mouse_mir_tdmd_sig]
+saveRDS(circ, file="circ.TDMD.rds")
+```
+
+```{r, include=FALSE}
+circ <- readRDS("circ.TDMD.rds")
+```
+
+
+```{r}
 circ$gene.label <- sapply(strsplit(circ$gene,","),"[",1)
 circ.table <- as.data.frame(circ)[,-c(3:5)]
 saveRDS(circ.table, "suppTable_circTDMD.rds")
@@ -179,6 +188,7 @@ pp <- plot_grid(
   p2 + ggtitle("Potential TDMD sites in circRNAs"), 
   nrow=2, labels="AUTO", scale=0.95
 )
+pp
 ggsave("Figure_5.pdf", plot = pp, width = 8, height = 8, bg="white")
 ggsave("Figure_5.png", plot = pp, width = 8, height = 8, bg="white")
 ```

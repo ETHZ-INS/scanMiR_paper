@@ -213,7 +213,7 @@ bl <- ggplot() + theme_void()
 ppa <- plot_grid(bl,p6,bl,ncol = 3,labels = c("","B",""), rel_widths = c(1,5,1))
 ppa <- ppa + draw_text("miR-671-5p 'slicing?' site at nt 1301 of CDR1as", x = 0.25, y = 0.87, hjust = 0, fontface = "italic", size = 10.5) 
 
-ppb <- plot_grid(bl,p4,bl,ncol = 3,labels = c("","E",""), rel_widths = c(1,5,1))
+ppb <- plot_grid(bl,p8,bl,ncol = 3,labels = c("","E",""), rel_widths = c(1,5,1))
 ppb <- ppb + draw_text("miR-7-5p 'TDMD?' site at nt 2887 of Cyrano", x = 0.25, y = 0.87, hjust = 0, fontface = "italic", size = 10.5) 
 
 ppc <- plot_grid(bl,p4,bl,ncol = 3,labels = c("","C",""), rel_widths = c(1,5,1))
@@ -238,45 +238,23 @@ pp <- plot_grid(pp1,pp2,ncol = 1, rel_heights = c(1.6,1))
 
 ```{r, fig.width=8.5, fig.heigth=7}
 pp
-ggsave("Figure_4.pdf",plot = pp, width = 8.5, height = 7,  bg = "white")
-ggsave("Figure_4.png",plot = pp, width = 8.5, height = 7,  bg = "white")
 ```
 
-# Grid
-```{r, eval=TRUE}
-# legend <- get_legend(
-#   # create some space to the left of the legend
-#   p5 + theme(legend.box.margin = margin(0, 8, 0, 0))
-# )
-# 
-# pp1 <- plot_grid(p3 + theme(legend.position = "none"),p4,
-#                  nrow=2, rel_heights = c(6,2), labels = c("A","B")) + theme(plot.margin = unit(c(0,3,0,0), "lines"))
-# 
-# pp2 <- plot_grid(p5 + theme(legend.position = "none"),p6,
-#                  nrow=2, rel_heights = c(6,2), labels = c("C","D")) + theme(plot.margin = unit(c(0,3,0,0), "lines"))
-# 
-# pp3 <- plot_grid(p7 + theme(legend.position = "none"),
-#                  p8,nrow=2, rel_heights = c(6,2), labels = c("E","F")) + theme(plot.margin = unit(c(0,3,0,0), "lines"))
-# 
-# pp4 <- plot_grid(p9 + theme(legend.position = "none"),
-#                  p10,nrow=2, rel_heights = c(6,2), labels = c("G","H")) + theme(plot.margin = unit(c(0,3,0,0), "lines"))
-# 
-# 
-# pp_a <- plot_grid(pp1,pp2,ggplot() + theme_void(),
-#                 ncol = 3, labels = c(""),rel_widths = c(1,1,0.3), scale = 0.95)
-# 
-# pp_b <- plot_grid(pp3,pp4,legend,
-#                 ncol = 3, rel_widths = c(1,1,0.3), labels = c(""), scale = 0.95)
-# 
-# pp <- plot_grid(pp_a,pp_b,ncol = 1)
-# 
-# 
-# 
-# ggsave("Figure_4.pdf",plot = pp, width = 13, height = 8, bg = "white")
-# ggsave("Figure_4.png",plot = pp, width = 13, height = 8, bg = "white")
+1-column format:
+
+```{r, fig.width=5, fig.height=7}
+ppa <- plot_grid(p6) + draw_text("miR-671-5p 'slicing?' site at nt 1301 of CDR1as", x = 0.25, y = 0.87, hjust = 0, fontface = "italic", size = 10.5) 
+
+ppb <- plot_grid(p8) + draw_text("miR-7-5p 'TDMD?' site at nt 2887 of Cyrano", x = 0.25, y = 0.87, hjust = 0, fontface = "italic", size = 10.5)
+
+ppc <- plot_grid(p4) + draw_text("miR-196a-5p 'slicing?' site at nt 425 of HOXB8", x = 0.25, y = 0.87, hjust = 0, fontface = "italic", size = 10.5) 
+
+ppd <- plot_grid(p10) + draw_text("miR-29b-3p 'TDMD?' site at nt 554 of NREP", x = 0.25, y = 0.87, hjust = 0, fontface = "italic", size = 10.5) 
+
+pp <- plot_grid(p5, NULL, ppa, ppb, ppc, ppd, ncol=1, rel_heights=c(3,0.2,1,1,1,1),
+          labels=c("A","",LETTERS[-1]))
+ggsave("Figure_4.pdf",plot = pp, width = 5, height = 7,  bg = "white")
+ggsave("Figure_4.png",plot = pp, width = 5, height = 7,  bg = "white")
+
 ```
-
-
-
-
 

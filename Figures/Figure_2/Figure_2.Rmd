@@ -116,16 +116,16 @@ ms$cor <- sapply(mods, FUN=function(x) x$cor)[row.names(ms)]
 ms$seed7.entropy <- acss::entropy(ms$seed7)
 ms$seed7.entropy2 <- as.factor(round(ms$seed7.entropy,2))
 ms$seed.GC <- nchar(gsub("A|T","",ms$seed7))/7
-p1 <- ggplot(ms, aes(seed7.entropy2, cor)) + geom_boxplot() +
+sp1 <- ggplot(ms, aes(seed7.entropy2, cor)) + geom_boxplot() +
   labs(x="Seed entropy", y="Correlation")
-p2 <- ggplot(ms, aes(as.factor(round(seed.GC,2)), cor)) + geom_boxplot() + 
+sp2 <- ggplot(ms, aes(as.factor(round(seed.GC,2)), cor)) + geom_boxplot() + 
   ylab("Correlation") + xlab("Proportion of G/C in seed")
-plot_grid(p1,p2)
+plot_grid(sp1,sp2)
 ```
 
 
 
-```{r, fig.width=10, fig.height=11}
+```{r, fig.width=11, fig.height=6}
 mirs <- c("hsa-miR-199a-5p","hsa-miR-124-3p", "hsa-miR-499a-5p")
 #mirs <- c("hsa-miR-7-5p","hsa-miR-124-3p", "hsa-miR-499a-5p")
 #mirs <- c("hsa-miR-495-3p", "hsa-miR-124-3p", "hsa-miR-92b-5p")
@@ -136,28 +136,32 @@ p2 <- ggplot(ms, aes(m6, topNC)) + geom_abline(slope=1, colour="grey") +
                    min.segment.length = 0, segment.color = "black", segment.size= 1) + 
   labs(x=bquote("median -"*log(K[D])*" of 6mers"), y=
          bquote(atop("-"*log(K[D])*" of top","non-canonical")), 
-       colour=bquote(atop("Gini"~(K[D])~"of the      ", "top 15 k-mers  "))) + 
-  theme(legend.position = "bottom") +
+       colour=bquote(atop("Gini"~(K[D])~"of", "top 15 k-mers"))) + 
+  #theme(legend.position = "bottom") +
   scale_colour_viridis(breaks=scales::pretty_breaks(3))
 
 ps <- lapply(mirs, FUN=function(x){
   p <- plotKdModel(mods[[x]], what = "seeds") + 
     theme(axis.text.y = element_text(family="mono"), 
-          plot.subtitle=element_text(family="mono"))
+          plot.title=element_text(hjust=0),
+          plot.subtitle=element_text(family="mono", size=10, hjust=1))
     # scale_fill_manual(values=c("7mer"= darkgreen, "6mer"="#4477AA",
     #                             "g-bulged 6mer"="#117733", "+A"="darkred",
     #                             "non-canonical"=light,
     #                            "g-bulged 7mer"= turquoise))
   p + scale_fill_manual(values = type_cols[p$data$type])
 })
-ps[[1]] <- ps[[1]] + theme(legend.position = "none")
-ps[[3]] <- ps[[3]] + theme(legend.position = "none")
+leg <- ggpubr::get_legend(ps[[2]])
+ps <- lapply(ps, FUN=function(x) x + theme(legend.position = "none"))
 
-plot_grid(p1, p1b, p2, ps[[3]], ps[[2]], ps[[1]], 
-          ncol=2, rel_widths = c(5,4), rel_heights=c(5,4,4), scale=0.95, labels="AUTO")
+row1 <- plot_grid(p1, plot_grid(p1b, p2, nrow=2, labels=c("B","C")), nrow=1, 
+                  scale=0.95, labels=c("A",NULL))
+row2 <- plot_grid(ps[[3]], ps[[2]], ps[[1]], leg, nrow=1, rel_widths=c(2,2,2,0.8),
+                  labels=LETTERS[4:6], scale=0.95)
+pp <- plot_grid( row1, row2, nrow=2, rel_heights=c(6,4))
 
-ggsave("Figure_2.png", height=10, width=9, bg="white")
-ggsave("Figure_2.pdf", height=10, width=9, bg="white")
+ggsave("Figure_2.png", pp, height=7, width=11, bg="white")
+ggsave("Figure_2.pdf", pp, height=7, width=11, bg="white")
 
 ```
 
